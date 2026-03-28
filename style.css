@@ -399,6 +399,151 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ============================================================
+   3Dウォークスルー ボタン
+   ============================================================ */
+.btn-walkthrough {
+  background: linear-gradient(135deg, #7c3aed, #2563eb) !important;
+  color: white !important;
+  border-color: transparent !important;
+  font-weight: 600 !important;
+  padding: 6px 14px !important;
+  letter-spacing: .02em;
+}
+.btn-walkthrough:hover {
+  background: linear-gradient(135deg, #6d28d9, #1d4ed8) !important;
+  box-shadow: 0 2px 8px rgba(124,58,237,.4);
+}
+
+/* ============================================================
+   3Dウォークスルー オーバーレイ
+   ============================================================ */
+#wt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#wt-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* 照準 */
+#wt-crosshair {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px; height: 22px;
+  pointer-events: none;
+  z-index: 10;
+}
+#wt-crosshair::before,
+#wt-crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(255,255,255,0.85);
+  border-radius: 1px;
+}
+#wt-crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+#wt-crosshair::after  { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+
+/* 現在の部屋名 */
+#wt-room-name {
+  position: absolute;
+  top: 20px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.5);
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 6px 18px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 10;
+  letter-spacing: .04em;
+  backdrop-filter: blur(4px);
+  min-height: 32px;
+}
+
+/* 操作ヒント */
+#wt-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.72);
+  color: white;
+  padding: 24px 32px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 2;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.12);
+  z-index: 10;
+}
+.wt-hint-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.wt-hint-click {
+  margin-top: 10px;
+  font-size: 13px;
+  opacity: .7;
+  animation: wt-blink 1.4s ease-in-out infinite;
+}
+@keyframes wt-blink {
+  0%,100% { opacity: .7; } 50% { opacity: .25; }
+}
+#wt-hint kbd {
+  display: inline-block;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+/* ミニマップ */
+#wt-minimap {
+  position: absolute;
+  bottom: 20px; right: 20px;
+  width: 150px; height: 150px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.25);
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 2px 12px rgba(0,0,0,.5);
+}
+
+/* 終了ボタン */
+#wt-close {
+  position: absolute;
+  top: 16px; right: 20px;
+  background: rgba(0,0,0,0.55);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  transition: background .15s;
+}
+#wt-close:hover { background: rgba(220,38,38,0.8); border-color: transparent; }
+
+/* ============================================================
    モードボタン
    ============================================================ */
 .mode-btn {

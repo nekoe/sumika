@@ -1,7 +1,7 @@
 // ツールバーUI
 import { ELEMENT_TOOLS } from './walls.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onWalkthrough }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
     `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}" style="display:none">${t.icon} ${t.label}</button>`
   ).join('');
@@ -41,6 +41,9 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <input type="file" id="btn-import" accept=".json" style="display:none">
       </label>
       <button id="btn-reset" class="btn-danger">🗑️ リセット</button>
+    </div>
+    <div class="toolbar-group">
+      <button id="btn-walkthrough" class="btn-walkthrough">🚶 3Dウォークスルー</button>
     </div>
   `;
 
@@ -99,6 +102,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   document.getElementById('btn-reset').addEventListener('click', () => {
     if (confirm('間取りをリセットしますか？この操作は元に戻せません。')) onReset();
   });
+  document.getElementById('btn-walkthrough').addEventListener('click', () => onWalkthrough?.());
 
   // キーボードショートカット
   document.addEventListener('keydown', e => {

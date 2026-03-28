@@ -6,6 +6,7 @@ import { saveProject, loadProject, exportJSON, importJSON, resetProject } from '
 import { initToolbar } from './toolbar.js';
 import { initWallLayer, renderWallLayer, getEdgeAt, edgeKey, ELEMENT_TOOLS } from './walls.js';
 import { renderZones, createZoneData, ZONE_PRESETS } from './zones.js';
+import { startWalkthrough } from './walkthrough.js';
 
 // ============================================================
 // 状態
@@ -67,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
       toolbar.syncSliders(state);
       showToast('読み込みました');
     }, msg => alert(msg)),
+    onWalkthrough: () => startWalkthrough(state),
     onReset: () => {
       pushUndo();
       state.rooms    = [];
