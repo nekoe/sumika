@@ -16,15 +16,22 @@ export const ROOM_TYPES = [
   { id: 'storage',  label: '納戸/WIC',   defaultW: 2, defaultH: 2, color: '#EFEBE9', icon: '📦' },
   { id: 'garage',   label: '駐車場',     defaultW: 3, defaultH: 4, color: '#ECEFF1', icon: '🚗' },
   { id: 'balcony',  label: 'バルコニー', defaultW: 4, defaultH: 2, color: '#F1F8E9', icon: '🌿' },
+  { id: 'void',     label: '吹き抜け',   defaultW: 4, defaultH: 4, color: '#dbeafe', icon: '⬜', isVoid: true },
   { id: 'custom',   label: 'カスタム',   defaultW: 3, defaultH: 3, color: '#FFFFFF', icon: '✏️' },
 ];
 
-// 1グリッド = 910mm = 0.91m
-// 2マス = 1畳（1820mm × 910mm）
 export function calcArea(w, h) {
   const tatami = (w * h / 2).toFixed(1);
   const sqm    = (w * h * 0.91 * 0.91).toFixed(1);
   return { tatami, sqm };
+}
+
+export function calcAreaCells(cells) {
+  const count = cells.length;
+  return {
+    tatami: (count / 2).toFixed(1),
+    sqm:    (count * 0.91 * 0.91).toFixed(1),
+  };
 }
 
 export function getTypeById(typeId) {
@@ -35,7 +42,7 @@ export function renderPalette(container) {
   container.innerHTML = '';
   for (const type of ROOM_TYPES) {
     const item = document.createElement('div');
-    item.className = 'palette-item';
+    item.className = 'palette-item' + (type.isVoid ? ' palette-item-void' : '');
     item.draggable = true;
     item.dataset.typeId = type.id;
     item.style.backgroundColor = type.color;
@@ -58,11 +65,29 @@ export function createRoomData(typeId, x, y) {
     id: generateId(),
     typeId,
     label: type.label,
-    x,
-    y,
+    x, y,
     w: type.defaultW,
     h: type.defaultH,
     color: type.color,
+    zones: [],
+  };
+}
+
+export function createIrregularRoomData(typeId, cells) {
+  const cols = cells.map(k => +k.split(',')[0]);
+  const rows = cells.map(k => +k.split(',')[1]);
+  const x = Math.min(...cols);
+  const y = Math.min(...rows);
+  const w = Math.max(...cols) - x + 1;
+  const h = Math.max(...rows) - y + 1;
+  const type = getTypeById(typeId);
+  return {
+    id: generateId(),
+    typeId,
+    label: type.label,
+    x, y, w, h,
+    color: type.color,
+    cells,
     zones: [],
   };
 }

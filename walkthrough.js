@@ -12,7 +12,7 @@ const WIN_HIGH   = 1.8;
 const SPEED      = 4.0;
 const MOUSE_SENS = 0.002;
 const COL_R      = 0.28;
-const DOOR_DIST  = 1.8;
+const DOOR_DIST  = 0.5;
 const STAIR_SPEED = 2.5;  // 階段移動速度 (m/s)
 
 // ─────────────────────────────────────────────────────────
@@ -150,16 +150,23 @@ export function startWalkthrough(state) {
       // ── 通常移動 ───────────────────────────────────────
       const fwd   = keys['KeyW'] || keys['ArrowUp'];
       const bwd   = keys['KeyS'] || keys['ArrowDown'];
-      const left  = keys['KeyA'] || keys['ArrowLeft'];
-      const right = keys['KeyD'] || keys['ArrowRight'];
-      if (fwd || bwd || left || right) {
+      const turnL = keys['KeyA'] || keys['ArrowLeft'];
+      const turnR = keys['KeyD'] || keys['ArrowRight'];
+
+      // 左右キー → 視点回転
+      if (turnL || turnR) {
+        const TURN = Math.PI * 0.9; // rad/s
+        yaw += ((turnL ? 1 : 0) - (turnR ? 1 : 0)) * TURN * dt;
+        camera.rotation.set(pitch, yaw, 0, 'YXZ');
+      }
+
+      // 前後キー → 前進・後退
+      if (fwd || bwd) {
         const sprint = (keys['ShiftLeft'] || keys['ShiftRight']) ? 2 : 1;
-        const dx = (right ? 1 : 0) - (left  ? 1 : 0);
-        const dz = (bwd   ? 1 : 0) - (fwd   ? 1 : 0);
-        const len = Math.sqrt(dx*dx + dz*dz) || 1;
+        const dz = (bwd ? 1 : 0) - (fwd ? 1 : 0);
         const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
-        const wx = ((dx/len)*cosY + (dz/len)*sinY) * SPEED * sprint * dt;
-        const wz = (-(dx/len)*sinY + (dz/len)*cosY) * SPEED * sprint * dt;
+        const wx = dz * sinY * SPEED * sprint * dt;
+        const wz = dz * cosY * SPEED * sprint * dt;
         const cx = camera.position.x, cz = camera.position.z;
         const fd = floorData[currentFloor3D];
         const moved = tryMove(cx, cz, cx + wx, cz + wz, fd);
@@ -194,7 +201,10 @@ export function startWalkthrough(state) {
     // 部屋名（現在フロア）
     const gx = camera.position.x / CELL, gz = camera.position.z / CELL;
     const curFloorRooms = floors[currentFloor3D]?.rooms || [];
-    const curRoom = curFloorRooms.find(r => gx >= r.x && gx < r.x+r.w && gz >= r.y && gz < r.y+r.h);
+    const curRoom = curFloorRooms.find(r => {
+      if (r.cells) return r.cells.includes(`${Math.floor(gx)},${Math.floor(gz)}`);
+      return gx >= r.x && gx < r.x+r.w && gz >= r.y && gz < r.y+r.h;
+    });
     const nameEl = document.getElementById('wt-room-name');
     if (nameEl) nameEl.textContent = curRoom ? `${currentFloor3D + 1}F ${curRoom.label}` : `${currentFloor3D + 1}F`;
 
@@ -260,24 +270,41 @@ function buildScene(scene, floors, state) {
     const elements = fl.elements || [];
     const stairs   = fl.stairs   || [];
 
-    if (rooms.length === 0 && fi > 0) {
+    if (rooms.length === 0 && stairs.length === 0 && fi > 0) {
       floorData.push({ wallSegs: [], doorMap: new Map(), roomRects: [] });
       continue;
     }
 
+    // 上のフロアのvoidセルキー（天井の穴あけに使用）
+    const aboveVoidCells = (fi + 1 < floors.length)
+      ? getVoidCells(floors[fi + 1].rooms || [])
+      : new Set();
+
     // フロアの床・天井
     generateFloors(scene, rooms, baseY);
     generateZoneFloors(scene, rooms, baseY);
-    generateCeilings(scene, rooms, baseY);
+    generateCeilings(scene, rooms, baseY, aboveVoidCells);
     if (fi > 0) generateFloorSlab(scene, rooms, baseY);
 
     // 壁・建具
-    const { wallSegs, doorMap } = generateWalls(scene, { rooms, elements }, baseY);
+    const { wallSegs, doorMap } = generateWalls(scene, { rooms, elements, stairs }, baseY);
 
-    const roomRects = rooms.map(r => ({
-      minX: r.x * CELL, maxX: (r.x + r.w) * CELL,
-      minZ: r.y * CELL, maxZ: (r.y + r.h) * CELL,
-    }));
+    // 不定形部屋はセルごとにrectを生成（バウンディングボックスより正確な衝突判定）
+    // void部屋は歩行不可（吹き抜け）
+    const roomRects = [
+      ...rooms.flatMap(r => {
+        if (r.typeId === 'void') return [];
+        if (r.cells) {
+          return r.cells.map(key => {
+            const [c, ro] = key.split(',').map(Number);
+            return { minX: c*CELL, maxX: (c+1)*CELL, minZ: ro*CELL, maxZ: (ro+1)*CELL };
+          });
+        }
+        return [{ minX: r.x*CELL, maxX: (r.x+r.w)*CELL, minZ: r.y*CELL, maxZ: (r.y+r.h)*CELL }];
+      }),
+      // 階段セルも歩行可能エリアに含める（昇降のため入れるようにする）
+      ...stairs.map(s => ({ minX: s.x*CELL, maxX: (s.x+s.w)*CELL, minZ: s.y*CELL, maxZ: (s.y+s.h)*CELL })),
+    ];
 
     floorData.push({ wallSegs, doorMap, roomRects });
 
@@ -287,18 +314,23 @@ function buildScene(scene, floors, state) {
     }
   }
 
-  // 階段エリアの登録（両フロアに同じ位置に階段があるペアを探す）
+  // 階段エリアの登録
+  // mirrorフラグなしの階段のみ処理。同じ位置は重複登録しない（3F接続防止）
+  const seenStairPos = new Set();
   for (let fi = 0; fi < floors.length; fi++) {
     for (const s of (floors[fi].stairs || [])) {
-      for (let fj = fi + 1; fj < floors.length; fj++) {
-        const matched = (floors[fj].stairs || []).find(t => t.x === s.x && t.y === s.y);
-        if (matched) {
-          stairAreas.push({
-            x1: s.x * CELL,      z1: s.y * CELL,
-            x2: (s.x+s.w)*CELL,  z2: (s.y+s.h)*CELL,
-            floors: [fi, fj],
-          });
-        }
+      if (s.mirror) continue;
+      const key = `${s.x},${s.y}`;
+      if (seenStairPos.has(key)) continue;
+      seenStairPos.add(key);
+      // この階段が接続する隣接フロア（常に 0↔1）
+      const fj = fi === 0 ? Math.min(1, floors.length - 1) : 0;
+      if (fj !== fi) {
+        stairAreas.push({
+          x1: s.x * CELL,      z1: s.y * CELL,
+          x2: (s.x+s.w)*CELL,  z2: (s.y+s.h)*CELL,
+          floors: [Math.min(fi, fj), Math.max(fi, fj)],
+        });
       }
     }
   }
@@ -334,28 +366,46 @@ function toColor(hex) {
 
 function generateFloors(scene, rooms, baseY) {
   for (const r of rooms) {
-    const m = new THREE.Mesh(
-      new THREE.PlaneGeometry(r.w * CELL, r.h * CELL),
-      new THREE.MeshLambertMaterial({ color: toColor(r.color) })
-    );
-    m.rotation.x = -Math.PI / 2;
-    m.position.set((r.x + r.w/2)*CELL, baseY + 0.001, (r.y + r.h/2)*CELL);
-    m.receiveShadow = true;
-    scene.add(m);
+    if (r.typeId === 'void') continue;
+    const mat = new THREE.MeshLambertMaterial({ color: toColor(r.color) });
+    if (r.cells) {
+      // 不定形: セルごとに床パネル
+      for (const key of r.cells) {
+        const [col, row] = key.split(',').map(Number);
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(CELL, CELL), mat);
+        m.rotation.x = -Math.PI / 2;
+        m.position.set((col + 0.5)*CELL, baseY + 0.001, (row + 0.5)*CELL);
+        m.receiveShadow = true;
+        scene.add(m);
+      }
+    } else {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w * CELL, r.h * CELL), mat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set((r.x + r.w/2)*CELL, baseY + 0.001, (r.y + r.h/2)*CELL);
+      m.receiveShadow = true;
+      scene.add(m);
+    }
   }
 }
 
 function generateFloorSlab(scene, rooms, baseY) {
-  // 2F以上の床スラブ（1Fから見ると天井の補強）
   const slabMat = new THREE.MeshLambertMaterial({ color: 0xe8e0d8 });
   for (const r of rooms) {
-    const m = new THREE.Mesh(
-      new THREE.BoxGeometry(r.w*CELL, 0.25, r.h*CELL),
-      slabMat
-    );
-    m.position.set((r.x+r.w/2)*CELL, baseY - 0.125, (r.y+r.h/2)*CELL);
-    m.receiveShadow = true;
-    scene.add(m);
+    if (r.typeId === 'void') continue;
+    if (r.cells) {
+      for (const key of r.cells) {
+        const [col, row] = key.split(',').map(Number);
+        const m = new THREE.Mesh(new THREE.BoxGeometry(CELL, 0.25, CELL), slabMat);
+        m.position.set((col + 0.5)*CELL, baseY - 0.125, (row + 0.5)*CELL);
+        m.receiveShadow = true;
+        scene.add(m);
+      }
+    } else {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL, 0.25, r.h*CELL), slabMat);
+      m.position.set((r.x+r.w/2)*CELL, baseY - 0.125, (r.y+r.h/2)*CELL);
+      m.receiveShadow = true;
+      scene.add(m);
+    }
   }
 }
 
@@ -375,82 +425,150 @@ function generateZoneFloors(scene, rooms, baseY) {
   }
 }
 
-function generateCeilings(scene, rooms, baseY) {
+function generateCeilings(scene, rooms, baseY, aboveVoidCells = new Set()) {
   const mat = new THREE.MeshLambertMaterial({ color: 0xf8f8f6, side: THREE.DoubleSide });
   for (const r of rooms) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w*CELL, r.h*CELL), mat);
-    m.rotation.x = Math.PI / 2;
-    m.position.set((r.x+r.w/2)*CELL, baseY + WALL_H, (r.y+r.h/2)*CELL);
-    scene.add(m);
+    if (r.typeId === 'void') continue;
+    if (r.cells) {
+      for (const key of r.cells) {
+        if (aboveVoidCells.has(key)) continue;
+        const [col, row] = key.split(',').map(Number);
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(CELL, CELL), mat);
+        m.rotation.x = Math.PI / 2;
+        m.position.set((col + 0.5)*CELL, baseY + WALL_H, (row + 0.5)*CELL);
+        scene.add(m);
+      }
+    } else {
+      // 矩形部屋: void穴がある場合はセルごとに生成
+      if (aboveVoidCells.size > 0) {
+        for (let row = r.y; row < r.y + r.h; row++) {
+          for (let col = r.x; col < r.x + r.w; col++) {
+            if (aboveVoidCells.has(`${col},${row}`)) continue;
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(CELL, CELL), mat);
+            m.rotation.x = Math.PI / 2;
+            m.position.set((col + 0.5)*CELL, baseY + WALL_H, (row + 0.5)*CELL);
+            scene.add(m);
+          }
+        }
+      } else {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w*CELL, r.h*CELL), mat);
+        m.rotation.x = Math.PI / 2;
+        m.position.set((r.x+r.w/2)*CELL, baseY + WALL_H, (r.y+r.h/2)*CELL);
+        scene.add(m);
+      }
+    }
   }
 }
 
 // ─────────────────────────────────────────────────────────
-// 階段ジオメトリ
+// void部屋のセルキーを収集するヘルパー
+// ─────────────────────────────────────────────────────────
+function getVoidCells(rooms) {
+  const cells = new Set();
+  for (const r of rooms) {
+    if (r.typeId !== 'void') continue;
+    if (r.cells) {
+      for (const key of r.cells) cells.add(key);
+    } else {
+      for (let row = r.y; row < r.y + r.h; row++)
+        for (let col = r.x; col < r.x + r.w; col++)
+          cells.add(`${col},${row}`);
+    }
+  }
+  return cells;
+}
+
+// ─────────────────────────────────────────────────────────
+// 階段ジオメトリ（向き対応: n/s/e/w）
 // ─────────────────────────────────────────────────────────
 function generateStair(scene, stair, baseY, floorIdx) {
   const sx = stair.x * CELL;
   const sz = stair.y * CELL;
   const sw = stair.w * CELL;
   const sh = stair.h * CELL;
+  const dir = stair.dir || 's';
 
-  // 踏面（ステップ）の色
-  const stepMat  = new THREE.MeshLambertMaterial({ color: 0xc4a882 });
-  const riseMat  = new THREE.MeshLambertMaterial({ color: 0xb89a70 });
-  const sideMat  = new THREE.MeshLambertMaterial({ color: 0xa08060 });
+  // ミラー階段（2F側）は吹き抜けマーカーのみ表示
+  if (stair.mirror) {
+    const marker = new THREE.Mesh(
+      new THREE.PlaneGeometry(sw, sh),
+      new THREE.MeshLambertMaterial({ color: 0xd4b896, transparent: true, opacity: 0.3 })
+    );
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.set(sx + sw / 2, baseY + 0.005, sz + sh / 2);
+    scene.add(marker);
+    return;
+  }
 
-  const STEPS    = 8;
-  const stepD    = sh / STEPS;  // 奥行き方向の1段の深さ
-  const stepH    = FLOOR_H / STEPS;  // 1段の高さ
+  const stepMat = new THREE.MeshLambertMaterial({ color: 0xc4a882 });
+  const riseMat = new THREE.MeshLambertMaterial({ color: 0xb89a70 });
+  const sideMat = new THREE.MeshLambertMaterial({ color: 0xa08060, side: THREE.DoubleSide });
+
+  const STEPS = 8;
+  const stepH = FLOOR_H / STEPS;
+  const isNS  = (dir === 'n' || dir === 's');
 
   for (let i = 0; i < STEPS; i++) {
     const y0 = baseY + i * stepH;
-    const z0 = sz + i * stepD;
 
-    // 踏面
-    const tread = new THREE.Mesh(
-      new THREE.BoxGeometry(sw, 0.03, stepD),
-      stepMat
-    );
-    tread.position.set(sx + sw/2, y0 + stepH - 0.015, z0 + stepD/2);
-    scene.add(tread);
+    if (isNS) {
+      const stepD = sh / STEPS;
+      const z0 = dir === 's'
+        ? sz + i * stepD
+        : sz + sh - (i + 1) * stepD;
+      const riserZ = dir === 's' ? z0 : z0 + stepD;
 
-    // 蹴上
-    const riser = new THREE.Mesh(
-      new THREE.BoxGeometry(sw, stepH, 0.03),
-      riseMat
-    );
-    riser.position.set(sx + sw/2, y0 + stepH/2, z0);
-    scene.add(riser);
+      // 踏面
+      const tread = new THREE.Mesh(new THREE.BoxGeometry(sw, 0.03, stepD), stepMat);
+      tread.position.set(sx + sw / 2, y0 + stepH - 0.015, z0 + stepD / 2);
+      scene.add(tread);
+
+      // 蹴上
+      const riser = new THREE.Mesh(new THREE.BoxGeometry(sw, stepH, 0.03), riseMat);
+      riser.position.set(sx + sw / 2, y0 + stepH / 2, riserZ);
+      scene.add(riser);
+    } else {
+      const stepD = sw / STEPS;
+      const x0 = dir === 'e'
+        ? sx + i * stepD
+        : sx + sw - (i + 1) * stepD;
+      const riserX = dir === 'e' ? x0 : x0 + stepD;
+
+      // 踏面
+      const tread = new THREE.Mesh(new THREE.BoxGeometry(stepD, 0.03, sh), stepMat);
+      tread.position.set(x0 + stepD / 2, y0 + stepH - 0.015, sz + sh / 2);
+      scene.add(tread);
+
+      // 蹴上
+      const riser = new THREE.Mesh(new THREE.BoxGeometry(0.03, stepH, sh), riseMat);
+      riser.position.set(riserX, y0 + stepH / 2, sz + sh / 2);
+      scene.add(riser);
+    }
   }
 
-  // 側板（左右）
-  const sideGeo = new THREE.BufferGeometry();
-  // 三角形: 下端→上端の斜め板
-  const verts = new Float32Array([
-    0,      baseY,          0,
-    0,      baseY + FLOOR_H, sh,
-    0,      baseY,          sh,
-    0,      baseY,          0,
-    0,      baseY + FLOOR_H, 0,
-    0,      baseY + FLOOR_H, sh,
-  ]);
-  sideGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-  sideGeo.computeVertexNormals();
-  [sx, sx + sw].forEach(xPos => {
-    const side = new THREE.Mesh(sideGeo, sideMat);
-    side.position.set(xPos, 0, 0);
-    scene.add(side);
-  });
+  // 側板
+  if (isNS) {
+    [sx, sx + sw].forEach(xPos => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(sh, FLOOR_H), sideMat);
+      m.rotation.y = Math.PI / 2;
+      m.position.set(xPos, baseY + FLOOR_H / 2, sz + sh / 2);
+      scene.add(m);
+    });
+  } else {
+    [sz, sz + sh].forEach(zPos => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(sw, FLOOR_H), sideMat);
+      m.position.set(sx + sw / 2, baseY + FLOOR_H / 2, zPos);
+      scene.add(m);
+    });
+  }
 
   // 階段マーカー（床面）
-  const markerGeo = new THREE.PlaneGeometry(sw, sh);
-  const markerMat = new THREE.MeshLambertMaterial({
-    color: 0xd4b896, transparent: true, opacity: 0.5,
-  });
-  const marker = new THREE.Mesh(markerGeo, markerMat);
+  const marker = new THREE.Mesh(
+    new THREE.PlaneGeometry(sw, sh),
+    new THREE.MeshLambertMaterial({ color: 0xd4b896, transparent: true, opacity: 0.5 })
+  );
   marker.rotation.x = -Math.PI / 2;
-  marker.position.set(sx + sw/2, baseY + 0.005, sz + sh/2);
+  marker.position.set(sx + sw / 2, baseY + 0.005, sz + sh / 2);
   scene.add(marker);
 }
 
@@ -458,12 +576,23 @@ function generateStair(scene, stair, baseY, floorIdx) {
 // 壁・建具生成
 // ─────────────────────────────────────────────────────────
 function generateWalls(scene, floorState, baseY) {
-  const { rooms, elements } = floorState;
+  const { rooms, elements, stairs } = floorState;
   const occupied = new Set();
-  for (const r of rooms)
-    for (let row = r.y; row < r.y+r.h; row++)
-      for (let col = r.x; col < r.x+r.w; col++)
+  for (const r of rooms) {
+    if (r.cells) {
+      for (const key of r.cells) occupied.add(key);
+    } else {
+      for (let row = r.y; row < r.y+r.h; row++)
+        for (let col = r.x; col < r.x+r.w; col++)
+          occupied.add(`${col},${row}`);
+    }
+  }
+  // 階段セルも通行可能エリアとして扱う（境界に壁を生成しない）
+  for (const s of (stairs || [])) {
+    for (let row = s.y; row < s.y+s.h; row++)
+      for (let col = s.x; col < s.x+s.w; col++)
         occupied.add(`${col},${row}`);
+  }
 
   const elMap = new Map();
   for (const el of (elements || [])) elMap.set(`${el.dir}:${el.col}:${el.row}`, el);
@@ -480,11 +609,12 @@ function generateWalls(scene, floorState, baseY) {
   const added    = new Set();
 
   function addEdge(dir, col, row, nCol, nRow) {
-    if (occupied.has(`${nCol},${nRow}`)) return;
+    const el = elMap.get(`${dir}:${col}:${row}`);
+    // 隣接セルが占有済みの場合、明示的に配置された建具のみ描写する
+    if (occupied.has(`${nCol},${nRow}`) && !el) return;
     const k = `E:${dir}:${col}:${row}`;
     if (added.has(k)) return;
     added.add(k);
-    const el = elMap.get(`${dir}:${col}:${row}`);
     const type = el?.type;
     if (type === 'door') {
       addDoorGeometry(scene, doorMat, wallMat, dir, col, row, el?.flip || false, wallSegs, doorMap, baseY);
@@ -492,6 +622,9 @@ function generateWalls(scene, floorState, baseY) {
       addWallSeg(scene, wallMat,  dir, col, row, baseY + 0,        baseY + WIN_LOW);
       addWallSeg(scene, glassMat, dir, col, row, baseY + WIN_LOW,  baseY + WIN_HIGH);
       if (WALL_H - WIN_HIGH > 0.02) addWallSeg(scene, wallMat, dir, col, row, baseY + WIN_HIGH, baseY + WALL_H);
+      wallSegs.push({ dir, col, row, open: false });
+    } else if (type === 'lowwall') {
+      addWallSeg(scene, wallMat, dir, col, row, baseY, baseY + WALL_H / 3);
       wallSegs.push({ dir, col, row, open: false });
     } else {
       addWallSeg(scene, wallMat, dir, col, row, baseY, baseY + WALL_H);
@@ -508,11 +641,12 @@ function generateWalls(scene, floorState, baseY) {
   }
 
   for (const el of (elements || [])) {
-    if (el.type !== 'wall') continue;
+    if (el.type !== 'wall' && el.type !== 'lowwall') continue;
     const k = `I:${el.dir}:${el.col}:${el.row}`;
     if (added.has(k)) continue;
     added.add(k);
-    addWallSeg(scene, wallMat, el.dir, el.col, el.row, baseY, baseY + WALL_H);
+    const h = el.type === 'lowwall' ? WALL_H / 3 : WALL_H;
+    addWallSeg(scene, wallMat, el.dir, el.col, el.row, baseY, baseY + h);
     wallSegs.push({ dir: el.dir, col: el.col, row: el.row, open: false });
   }
 
@@ -696,10 +830,17 @@ function drawMinimap(ctx, floors, currentFloorIdx, camPos, yaw, state, stairArea
     const alpha = fi === currentFloorIdx ? 'bb' : '33';
     for (const r of (floors[fi].rooms || [])) {
       ctx.fillStyle = (r.color||'#ccc') + alpha;
-      ctx.beginPath(); ctx.roundRect(r.x*CELL*scale+ox, r.y*CELL*scale+oz, r.w*CELL*scale, r.h*CELL*scale, 2);
-      ctx.fill();
-      if (fi === currentFloorIdx) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.7; ctx.stroke();
+      if (r.cells) {
+        for (const key of r.cells) {
+          const [c, ro] = key.split(',').map(Number);
+          ctx.fillRect(c*CELL*scale+ox, ro*CELL*scale+oz, CELL*scale, CELL*scale);
+        }
+      } else {
+        ctx.beginPath(); ctx.roundRect(r.x*CELL*scale+ox, r.y*CELL*scale+oz, r.w*CELL*scale, r.h*CELL*scale, 2);
+        ctx.fill();
+        if (fi === currentFloorIdx) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.7; ctx.stroke();
+        }
       }
     }
   }

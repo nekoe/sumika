@@ -1,9 +1,10 @@
 // walls.js - 壁・ドア・窓のSVGレイヤー
 
 export const ELEMENT_TOOLS = [
-  { id: 'wall',   label: '壁',   icon: '▬', color: '#1e293b' },
-  { id: 'door',   label: 'ドア', icon: '🚪', color: '#92400e' },
-  { id: 'window', label: '窓',   icon: '🪟', color: '#0ea5e9' },
+  { id: 'wall',    label: '壁',    icon: '▬', color: '#1e293b' },
+  { id: 'lowwall', label: '腰壁',  icon: '▭', color: '#64748b' },
+  { id: 'door',    label: 'ドア',  icon: '🚪', color: '#92400e' },
+  { id: 'window',  label: '窓',    icon: '🪟', color: '#0ea5e9' },
 ];
 
 // エッジの一意キー: "h:col:row" or "v:col:row"
@@ -84,14 +85,38 @@ function svgLine(parent, x1, y1, x2, y2, cls) {
 }
 
 function renderElement(svgEl, el, cs) {
-  if (el.type === 'wall')   renderWall(svgEl, el.col, el.row, el.dir, cs);
-  if (el.type === 'door')   renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false);
-  if (el.type === 'window') renderWindow(svgEl, el.col, el.row, el.dir, cs);
+  if (el.type === 'wall')    renderWall(svgEl, el.col, el.row, el.dir, cs);
+  if (el.type === 'lowwall') renderLowWall(svgEl, el.col, el.row, el.dir, cs);
+  if (el.type === 'door')    renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false);
+  if (el.type === 'window')  renderWindow(svgEl, el.col, el.row, el.dir, cs);
 }
 
 function renderWall(svgEl, col, row, dir, cs) {
   const c = edgeCoords(col, row, dir, cs);
   svgLine(svgEl, c.x1, c.y1, c.x2, c.y2, 'el-wall');
+}
+
+function renderLowWall(svgEl, col, row, dir, cs) {
+  const c = edgeCoords(col, row, dir, cs);
+  // 腰壁：細い二重線で「低い壁」を表現
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('class', 'el-lowwall');
+  const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  if (dir === 'h') {
+    l1.setAttribute('x1', c.x1); l1.setAttribute('y1', c.y1 - 2);
+    l1.setAttribute('x2', c.x2); l1.setAttribute('y2', c.y2 - 2);
+    l2.setAttribute('x1', c.x1); l2.setAttribute('y1', c.y1 + 2);
+    l2.setAttribute('x2', c.x2); l2.setAttribute('y2', c.y2 + 2);
+  } else {
+    l1.setAttribute('x1', c.x1 - 2); l1.setAttribute('y1', c.y1);
+    l1.setAttribute('x2', c.x2 - 2); l1.setAttribute('y2', c.y2);
+    l2.setAttribute('x1', c.x1 + 2); l2.setAttribute('y1', c.y1);
+    l2.setAttribute('x2', c.x2 + 2); l2.setAttribute('y2', c.y2);
+  }
+  g.appendChild(l1);
+  g.appendChild(l2);
+  svgEl.appendChild(g);
 }
 
 function renderDoor(svgEl, col, row, dir, cs, flip) {

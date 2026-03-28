@@ -13,7 +13,7 @@
   --color-danger: #dc2626;
   --color-text: #1e293b;
   --color-text-muted: #64748b;
-  --toolbar-h: 60px;
+  --toolbar-h: 82px;
   --palette-w: 180px;
   --inspector-w: 240px;
   --radius: 8px;
@@ -33,36 +33,85 @@ body {
 }
 
 /* ============================================================
-   ツールバー
+   ツールバー（2行コンパクトレイアウト）
    ============================================================ */
 #toolbar {
   height: var(--toolbar-h);
   background: var(--color-panel);
   border-bottom: 1px solid var(--color-border);
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  flex-direction: column;
   flex-shrink: 0;
-  overflow-x: auto;
   box-shadow: var(--shadow);
   z-index: 100;
 }
 
-.toolbar-group {
+/* Row 1: メイン操作 */
+.tb-primary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  height: 46px;
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+
+/* Row 2: コンテキスト */
+.tb-context {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  height: 36px;
+  overflow-x: auto;
+  background: #f8f9fb;
+}
+
+/* グループ区切り */
+.tb-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--color-border);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+.tb-spacer { flex: 1; }
+
+/* ボタングループ */
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+/* コンテキストパネル */
+.tb-ctx {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-right: 12px;
-  border-right: 1px solid var(--color-border);
+  white-space: nowrap;
 }
-.toolbar-group:last-child { border-right: none; }
+.tb-ctx-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+}
 
+/* 採光パネル（常時） */
+.tb-sun {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ツールバー内ボタン共通 */
 #toolbar button, #toolbar .btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: white;
@@ -84,16 +133,40 @@ body {
 #toolbar label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-size: 12px;
   color: var(--color-text-muted);
   white-space: nowrap;
 }
 #toolbar label input[type=range] {
-  width: 80px;
+  width: 70px;
   accent-color: var(--color-accent);
 }
-#toolbar label span { min-width: 32px; font-size: 12px; color: var(--color-text); }
+#toolbar label b { min-width: 28px; font-size: 11px; color: var(--color-text); }
+
+/* 向きボタン */
+.dir-btn {
+  padding: 3px 7px !important;
+  font-size: 12px !important;
+  min-width: 0 !important;
+}
+.dir-btn.active {
+  background: var(--color-accent) !important;
+  color: white !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* 旧 toolbar-group（後方互換） */
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.toolbar-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
 
 /* ============================================================
    メインレイアウト
@@ -700,14 +773,21 @@ body {
   overflow: visible;
   z-index: 50;
 }
-#grid[data-mode="wall"]   { cursor: crosshair; }
-#grid[data-mode="door"]   { cursor: crosshair; }
-#grid[data-mode="window"] { cursor: crosshair; }
+#grid[data-mode="wall"]    { cursor: crosshair; }
+#grid[data-mode="lowwall"] { cursor: crosshair; }
+#grid[data-mode="door"]    { cursor: crosshair; }
+#grid[data-mode="window"]  { cursor: crosshair; }
 
 /* 壁 */
 .el-wall {
   stroke: #1e293b;
   stroke-width: 5;
+  stroke-linecap: round;
+}
+/* 腰壁 */
+.el-lowwall line {
+  stroke: #64748b;
+  stroke-width: 2;
   stroke-linecap: round;
 }
 /* ドア */
@@ -772,6 +852,61 @@ body {
   background: white;
   color: var(--color-text);
 }
+
+/* ============================================================
+   不定形描画プレビューキャンバス
+   ============================================================ */
+#paint-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 30;  /* room-block(z2) より上、wall-layer(z50) より下 */
+}
+#grid[data-mode="freeroom"] { cursor: crosshair; }
+#grid[data-mode="freeroom"] .room-block { pointer-events: none; }
+
+/* 不定形セルタイル */
+.room-cell {
+  position: absolute;
+  z-index: 2;
+  cursor: pointer;
+  transition: filter .1s;
+}
+.room-cell:hover { filter: brightness(0.92); z-index: 10; }
+.room-cell-selected {
+  box-shadow: inset 0 0 0 2.5px #2563eb;
+  z-index: 20;
+}
+
+/* 不定形ラベルオーバーレイ（背景なし・ポインタ透過） */
+.room-label-block {
+  position: absolute;
+  pointer-events: none;
+  z-index: 22;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.room-label-block .room-inner {
+  background: rgba(255,255,255,0.75);
+  border-radius: 6px;
+  padding: 2px 6px;
+  text-align: center;
+  backdrop-filter: blur(2px);
+  max-width: 90%;
+  pointer-events: all;
+}
+.room-label-block .room-label {
+  cursor: text;
+}
+
+/* パレット: 不定形モード中のアクティブ表示 */
+.palette-item.paint-active {
+  outline: 3px solid #2563eb;
+  outline-offset: -2px;
+  box-shadow: 0 0 0 5px rgba(37,99,235,0.18);
+}
+#grid[data-mode="freeroom"] .palette-item { cursor: pointer; }
 
 /* ============================================================
    フロアボタン
@@ -852,6 +987,103 @@ body {
   0%   { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
   60%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+}
+
+/* ============================================================
+   吹き抜け（ボイド）
+   ============================================================ */
+.room-void {
+  background: repeating-linear-gradient(
+    45deg,
+    #bfdbfe 0px, #bfdbfe 4px,
+    #dbeafe 4px, #dbeafe 14px
+  ) !important;
+  border: 2.5px dashed #3b82f6 !important;
+  opacity: 0.75;
+}
+.palette-item-void {
+  background: repeating-linear-gradient(
+    45deg,
+    #bfdbfe 0px, #bfdbfe 3px,
+    #dbeafe 3px, #dbeafe 10px
+  ) !important;
+  border: 1.5px dashed #3b82f6 !important;
+}
+.badge-void {
+  display: inline-block;
+  background: #3b82f6;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: .03em;
+}
+
+/* ============================================================
+   階段：選択状態・向き矢印
+   ============================================================ */
+.stair-selected {
+  box-shadow: 0 0 0 3px var(--color-accent) !important;
+  filter: brightness(1.08);
+}
+.stair-dir {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* ============================================================
+   面積サマリー（インスペクター内）
+   ============================================================ */
+.area-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.area-summary-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 2px;
+}
+.area-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
+.area-row.area-total {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+  font-weight: 700;
+}
+.area-floor {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.area-vals {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.area-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+.area-sqm {
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 /* ============================================================

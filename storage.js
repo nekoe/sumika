@@ -11,8 +11,9 @@ export function saveProject(state) {
       cellSize:     state.cellSize,
       currentFloor: state.currentFloor ?? 0,
       floors:       state.floors,
-      compass:      state.compass  ?? 0,
-      sunHour:      state.sunHour  ?? 12,
+      compass:      state.compass     ?? 0,
+      sunHour:      state.sunHour     ?? 12,
+      stairConfig:  state.stairConfig ?? { w: 2, h: 3, dir: 'n' },
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
@@ -64,8 +65,9 @@ export function exportJSON(state) {
     cellSize:     state.cellSize,
     currentFloor: state.currentFloor ?? 0,
     floors:       state.floors,
-    compass:      state.compass  ?? 0,
-    sunHour:      state.sunHour  ?? 12,
+    compass:      state.compass     ?? 0,
+    sunHour:      state.sunHour     ?? 12,
+    stairConfig:  state.stairConfig ?? { w: 2, h: 3, dir: 'n' },
     exportedAt:   new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
