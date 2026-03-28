@@ -63,10 +63,12 @@ export function startWalkthrough(state) {
   const { wallSegs, doorMap } = buildScene(scene, state);
 
   // ── 衝突判定 ─────────────────────────────────────────
+  // 部屋の外に出ないかチェック（マージンなし）
+  // 壁の衝突は wallBlocks 側で COL_R を使って管理する
   const roomRects = state.rooms.map(r => ({
-    minX: r.x * CELL + COL_R, maxX: (r.x + r.w) * CELL - COL_R,
-    minZ: r.y * CELL + COL_R, maxZ: (r.y + r.h) * CELL - COL_R,
-  })).filter(r => r.maxX > r.minX && r.maxZ > r.minZ);
+    minX: r.x * CELL, maxX: (r.x + r.w) * CELL,
+    minZ: r.y * CELL, maxZ: (r.y + r.h) * CELL,
+  }));
 
   function inRoom(x, z) {
     return roomRects.some(r => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ);
