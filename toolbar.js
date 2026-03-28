@@ -1,7 +1,7 @@
 // ツールバーUI
 import { ELEMENT_TOOLS } from './walls.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onWalkthrough }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onWalkthrough, onCompassChange }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
     `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}" style="display:none">${t.icon} ${t.label}</button>`
   ).join('');
@@ -41,6 +41,17 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <input type="file" id="btn-import" accept=".json" style="display:none">
       </label>
       <button id="btn-reset" class="btn-danger">🗑️ リセット</button>
+    </div>
+    <div class="toolbar-group" title="方位と採光設定">
+      <span class="toolbar-label">☀️ 採光:</span>
+      <label title="建物の向き（上が指定の方位）">
+        <span id="compass-label">${compassLabel(state.compass ?? 0)}</span>
+        <input type="range" id="inp-compass" min="0" max="315" step="45" value="${state.compass ?? 0}" style="width:70px">
+      </label>
+      <label title="太陽の時刻">
+        <span id="sunhour-label">${sunHourLabel(state.sunHour ?? 12)}</span>
+        <input type="range" id="inp-sunhour" min="6" max="18" step="0.5" value="${state.sunHour ?? 12}" style="width:70px">
+      </label>
     </div>
     <div class="toolbar-group">
       <button id="btn-walkthrough" class="btn-walkthrough">🚶 3Dウォークスルー</button>
@@ -104,6 +115,18 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   });
   document.getElementById('btn-walkthrough').addEventListener('click', () => onWalkthrough?.());
 
+  // 方位・採光
+  document.getElementById('inp-compass').addEventListener('input', e => {
+    state.compass = +e.target.value;
+    document.getElementById('compass-label').textContent = compassLabel(state.compass);
+    onCompassChange?.();
+  });
+  document.getElementById('inp-sunhour').addEventListener('input', e => {
+    state.sunHour = +e.target.value;
+    document.getElementById('sunhour-label').textContent = sunHourLabel(state.sunHour);
+    onCompassChange?.();
+  });
+
   // キーボードショートカット
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); onUndo(); }
@@ -139,4 +162,14 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       }
     }
   };
+}
+
+function compassLabel(deg) {
+  const labels = ['北↑','北東↗','東→','南東↘','南↓','南西↙','西←','北西↖'];
+  return labels[Math.round(deg / 45) % 8] + ' ';
+}
+function sunHourLabel(h) {
+  const hh = Math.floor(h);
+  const mm = h % 1 === 0.5 ? '30' : '00';
+  return `${hh}:${mm} `;
 }

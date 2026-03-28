@@ -19,6 +19,8 @@ let state = {
   elements: [],       // 壁・ドア・窓
   mode: 'room',       // 'room' | 'wall' | 'door' | 'window'
   elementTool: 'wall',
+  compass: 0,         // 方位（0=北が上）
+  sunHour: 12,        // 時刻（6〜18）
 };
 let grid = null;
 let undoStack = [];
@@ -41,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
     state.cellSize  = saved.cellSize  ?? 44;
     state.rooms     = saved.rooms     ?? [];
     state.elements  = saved.elements  ?? [];
+    state.compass   = saved.compass   ?? 0;
+    state.sunHour   = saved.sunHour   ?? 12;
   }
 
   grid  = createGrid(state.gridCols, state.gridRows);
@@ -68,7 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
       toolbar.syncSliders(state);
       showToast('読み込みました');
     }, msg => alert(msg)),
-    onWalkthrough: () => startWalkthrough(state),
+    onWalkthrough:   () => startWalkthrough(state),
+    onCompassChange: () => { renderCompassIndicator(); saveProject(state); },
     onReset: () => {
       pushUndo();
       state.rooms    = [];
@@ -127,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   renderAll();
+  renderCompassIndicator();
   toolbar.syncSliders(state);
   toolbar.updateUndoRedo(false, false);
 
@@ -393,6 +399,31 @@ function updateInspector() {
   }
 
   renderRoomInspector(panel, room);
+}
+
+// ============================================================
+// コンパスインジケーター（グリッド右下）
+// ============================================================
+function renderCompassIndicator() {
+  const wrapper = document.getElementById('canvas-wrapper');
+  let ind = document.getElementById('compass-indicator');
+  if (!ind) {
+    ind = document.createElement('div');
+    ind.id = 'compass-indicator';
+    wrapper.appendChild(ind);
+  }
+  const deg = state.compass ?? 0;
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  const label = dirs[Math.round(deg / 45) % 8];
+  const hour = state.sunHour ?? 12;
+  const hh = Math.floor(hour), mm = hour % 1 === 0.5 ? '30' : '00';
+  ind.innerHTML = `
+    <div class="ci-rose" style="transform:rotate(${deg}deg)">
+      <div class="ci-n">N</div>
+      <div class="ci-arrow"></div>
+    </div>
+    <div class="ci-label">${label} / ${hh}:${mm}</div>
+  `;
 }
 
 function renderRoomInspector(panel, room) {

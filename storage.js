@@ -11,6 +11,8 @@ export function saveProject(state) {
       cellSize: state.cellSize,
       rooms: state.rooms,
       elements: state.elements || [],
+      compass:  state.compass  ?? 0,
+      sunHour:  state.sunHour  ?? 12,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
@@ -47,6 +49,8 @@ export function exportJSON(state) {
     cellSize: state.cellSize,
     rooms: state.rooms,
     elements: state.elements || [],
+    compass:  state.compass  ?? 0,
+    sunHour:  state.sunHour  ?? 12,
     exportedAt: new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

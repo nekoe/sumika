@@ -399,6 +399,49 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ============================================================
+   コンパスインジケーター（グリッド右下）
+   ============================================================ */
+#compass-indicator {
+  position: absolute;
+  bottom: 36px;
+  right: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 30;
+}
+.ci-rose {
+  width: 44px; height: 44px;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .3s ease;
+}
+.ci-n {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px; font-weight: 700; color: #ef4444;
+}
+.ci-arrow {
+  width: 0; height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 28px solid #ef4444;
+  margin-top: 8px;
+  opacity: .85;
+}
+.ci-label {
+  font-size: 10px;
+  color: rgba(30,41,59,.75);
+  font-weight: 600;
+  background: rgba(255,255,255,.7);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+/* ============================================================
    3Dウォークスルー ボタン
    ============================================================ */
 .btn-walkthrough {
