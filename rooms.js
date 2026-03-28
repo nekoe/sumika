@@ -1,5 +1,7 @@
 // 部屋のマスタデータとDOM生成
 
+export const CELL_M = 0.91; // 1グリッドセル = 0.91m
+
 export const ROOM_TYPES = [
   { id: 'ldk',      label: 'LDK',        defaultW: 6, defaultH: 4, color: '#FFF3E0', icon: '🍳' },
   { id: 'living',   label: 'リビング',   defaultW: 5, defaultH: 4, color: '#E8F5E9', icon: '🛋️' },
@@ -22,16 +24,18 @@ export const ROOM_TYPES = [
 ];
 
 export function calcArea(w, h) {
-  const tatami = (w * h / 2).toFixed(1);
-  const sqm    = (w * h * 0.91 * 0.91).toFixed(1);
-  return { tatami, sqm };
+  const area = w * h;
+  return {
+    tatami: (area / 2).toFixed(1),
+    sqm:    (area * CELL_M * CELL_M).toFixed(1),
+  };
 }
 
 export function calcAreaCells(cells) {
   const count = cells.length;
   return {
     tatami: (count / 2).toFixed(1),
-    sqm:    (count * 0.91 * 0.91).toFixed(1),
+    sqm:    (count * CELL_M * CELL_M).toFixed(1),
   };
 }
 

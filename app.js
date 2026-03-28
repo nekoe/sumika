@@ -1,5 +1,5 @@
-import { createGrid, canPlace, canPlaceCells, placeRoom, placeRoomCells, removeRoom, rebuildGrid } from './grid.js';
-import { ROOM_TYPES, renderPalette, createRoomData, getTypeById, calcArea, calcAreaCells } from './rooms.js';
+import { createGrid, canPlace, canPlaceCells, placeRoomCells, removeRoom, rebuildGrid } from './grid.js';
+import { renderPalette, createRoomData, getTypeById, calcAreaCells, CELL_M } from './rooms.js';
 import { initDnd } from './dnd.js';
 import { attachResizeHandles } from './resize.js';
 import { saveProject, loadProject, exportJSON, importJSON, resetProject } from './storage.js';
@@ -7,6 +7,8 @@ import { initToolbar } from './toolbar.js';
 import { initWallLayer, renderWallLayer, getEdgeAt, edgeKey, ELEMENT_TOOLS } from './walls.js';
 import { startWalkthrough } from './walkthrough.js';
 import { getFurnitureTypeById } from './furniture.js';
+
+const AUTOSAVE_INTERVAL = 5000; // ms
 
 // ============================================================
 // 状態
@@ -54,33 +56,35 @@ let editingRoomId = null;   // セル編集中の部屋ID
 // ============================================================
 // 初期化
 // ============================================================
+// フロアデータをstateに適用する共通処理（初期化・インポート共用）
+function applyProjectData(data) {
+  state.gridCols     = data.gridCols     ?? 20;
+  state.gridRows     = data.gridRows     ?? 15;
+  state.cellSize     = data.cellSize     ?? 44;
+  state.compass      = data.compass      ?? 0;
+  state.sunHour      = data.sunHour      ?? 12;
+  state.currentFloor = data.currentFloor ?? 0;
+  if (data.stairConfig) state.stairConfig = data.stairConfig;
+  if (data.floors) {
+    state.floors = data.floors.map(f => ({
+      rooms:     f.rooms     ?? [],
+      elements:  f.elements  ?? [],
+      stairs:    f.stairs    ?? [],
+      furniture: f.furniture ?? [],
+    }));
+    while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [], furniture: [] });
+  } else {
+    // 旧フォーマット（floors なし）を移行
+    state.floors[0].rooms    = data.rooms    ?? [];
+    state.floors[0].elements = data.elements ?? [];
+  }
+  state.floors.forEach(f => f.rooms.forEach(r => normalizeCells(r)));
+  syncStairsBetweenFloors();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const saved = loadProject();
-  if (saved) {
-    state.gridCols      = saved.gridCols      ?? 20;
-    state.gridRows      = saved.gridRows      ?? 15;
-    state.cellSize      = saved.cellSize      ?? 44;
-    state.compass       = saved.compass       ?? 0;
-    state.sunHour       = saved.sunHour       ?? 12;
-    state.currentFloor  = saved.currentFloor  ?? 0;
-    if (saved.stairConfig) state.stairConfig = saved.stairConfig;
-    if (saved.floors) {
-      state.floors = saved.floors.map(f => ({
-        rooms:     f.rooms     ?? [],
-        elements:  f.elements  ?? [],
-        stairs:    f.stairs    ?? [],
-        furniture: f.furniture ?? [],
-      }));
-      while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [], furniture: [] });
-    } else {
-      state.floors[0].rooms    = saved.rooms    ?? [];
-      state.floors[0].elements = saved.elements ?? [];
-    }
-    // 旧データ移行：矩形部屋をセルベースに変換
-    state.floors.forEach(f => f.rooms.forEach(r => normalizeCells(r)));
-    // 旧データ移行：片フロアにしかない階段を両フロアへ同期
-    syncStairsBetweenFloors();
-  }
+  if (saved) applyProjectData(saved);
 
   grid = createGrid(state.gridCols, state.gridRows);
   rebuildGrid(grid, state.rooms);
@@ -105,27 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     onExport:            () => exportJSON(state),
     onImport:            file => importJSON(file, data => {
       pushUndo();
-      state.gridCols      = data.gridCols     ?? state.gridCols;
-      state.gridRows      = data.gridRows     ?? state.gridRows;
-      state.cellSize      = data.cellSize     ?? state.cellSize;
-      state.compass       = data.compass      ?? 0;
-      state.sunHour       = data.sunHour      ?? 12;
-      state.currentFloor  = data.currentFloor ?? 0;
-      if (data.stairConfig) state.stairConfig = data.stairConfig;
-      if (data.floors) {
-        state.floors = data.floors.map(f => ({
-          rooms:     f.rooms     ?? [],
-          elements:  f.elements  ?? [],
-          stairs:    f.stairs    ?? [],
-          furniture: f.furniture ?? [],
-        }));
-        while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [], furniture: [] });
-      } else {
-        state.floors[0].rooms    = data.rooms    ?? [];
-        state.floors[0].elements = data.elements ?? [];
-      }
-      // 旧データ移行：矩形部屋をセルベースに変換
-      state.floors.forEach(f => f.rooms.forEach(r => normalizeCells(r)));
+      applyProjectData(data);
       grid = createGrid(state.gridCols, state.gridRows);
       rebuildGrid(grid, state.rooms);
       renderAll();
@@ -345,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
   toolbar.syncFloor(state.currentFloor);
   toolbar.syncStairConfig(state.stairConfig);
 
-  setInterval(() => saveProject(state), 5000);
+  setInterval(() => saveProject(state), AUTOSAVE_INTERVAL);
 });
 
 // ============================================================
@@ -511,20 +495,14 @@ function commitRoomResize(room, x, y, w, h) {
   saveProject(state);
 }
 
-// 旧データ（矩形形式）をセルベースに変換
+// 旧データ（矩形形式）をセルベースに変換し、isDoma を補完
 function normalizeCells(room) {
-  if (room.cells && room.cells.length > 0) {
-    // isDoma が未設定の場合はタイプから推定
-    if (room.isDoma === undefined) {
-      room.isDoma = (room.typeId === 'doma' || room.typeId === 'genkan');
-    }
-    return room;
+  if (!room.cells || room.cells.length === 0) {
+    room.cells = [];
+    for (let r = room.y; r < room.y + room.h; r++)
+      for (let c = room.x; c < room.x + room.w; c++)
+        room.cells.push(`${c},${r}`);
   }
-  const cells = [];
-  for (let r = room.y; r < room.y + room.h; r++)
-    for (let c = room.x; c < room.x + room.w; c++)
-      cells.push(`${c},${r}`);
-  room.cells = cells;
   if (room.isDoma === undefined) {
     room.isDoma = (room.typeId === 'doma' || room.typeId === 'genkan');
   }
@@ -723,7 +701,7 @@ function appendIrregularRoom(gridEl, room) {
       <div class="room-icon">${icon}</div>
     </div>`;
   label.querySelector('.room-top-strip .room-label').addEventListener('dblclick', e => {
-    e.stopPropagation(); startLabelEditIrregular(label, room);
+    e.stopPropagation(); startLabelEdit(label, room);
   });
 
   // 矩形の場合：四隅のリサイズハンドル（選択時にCSSで表示）
@@ -935,48 +913,7 @@ function handleFurniturePlace(col, row) {
   saveProject(state);
 }
 
-function createRoomElement(room) {
-  const cs = state.cellSize;
-  const type = getTypeById(room.typeId);
-  const { tatami, sqm } = calcArea(room.w, room.h);
-  const el = document.createElement('div');
-  const isMultiSel = multiSelected.has(room.id);
-  el.className = 'room-block' + (room.id === selectedId ? ' selected' : '') + (type.isVoid ? ' room-void' : '') + (isMultiSel ? ' multi-selected' : '');
-  el.dataset.id     = room.id;
-  el.dataset.typeId = room.typeId;
-  el.dataset.x = room.x; el.dataset.y = room.y;
-  el.dataset.w = room.w; el.dataset.h = room.h;
-  el.draggable = (state.mode === 'room') && multiSelected.size === 0;
-  el.style.cssText = `left:${room.x*cs}px;top:${room.y*cs}px;width:${room.w*cs}px;height:${room.h*cs}px;background-color:${room.color};`;
-  el.innerHTML = `
-    <div class="room-inner">
-      <div class="room-icon">${type.icon}</div>
-      <div class="room-label" title="${room.label}">${room.label}</div>
-      <div class="room-area">${tatami}畳 <span class="room-sqm">(${sqm}㎡)</span></div>
-    </div>`;
-  el.addEventListener('click', e => {
-    if (e.target.closest('.resize-handle')) return;
-    e.stopPropagation();
-    if (e.ctrlKey || e.metaKey) { toggleMultiSelect(room.id); return; }
-    if (multiSelected.size > 0) { clearMultiSelected(); return; }
-    selectRoom(room.id);
-  });
-  el.querySelector('.room-label').addEventListener('dblclick', e => { e.stopPropagation(); startLabelEdit(el, room); });
-  attachResizeHandles(el, () => state.cellSize, (id, g) => handleResize(id, g));
-  return el;
-}
-
-function startLabelEdit(el, room) {
-  const labelEl = el.querySelector('.room-label');
-  const input = document.createElement('input');
-  input.type = 'text'; input.value = room.label; input.className = 'label-edit-input';
-  labelEl.replaceWith(input); input.focus(); input.select();
-  const commit = () => { pushUndo(); room.label = input.value.trim() || room.label; renderAll(); saveProject(state); };
-  input.addEventListener('blur', commit);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') renderAll(); });
-}
-
-function startLabelEditIrregular(labelDiv, room) {
+function startLabelEdit(labelDiv, room) {
   const labelEl = labelDiv.querySelector('.room-label');
   if (!labelEl) return;
   const input = document.createElement('input');
@@ -1013,33 +950,11 @@ function handleDropNew(typeId, col, row) {
   saveProject(state);
 }
 
+// dnd.js の onMove コールバック。全部屋はセルベースのため実質未使用
 function handleMove(roomId, newX, newY) {
   const room = state.rooms.find(r => r.id === roomId);
-  if (!room || room.cells) return;
-  newX = Math.max(0, Math.min(newX, state.gridCols - room.w));
-  newY = Math.max(0, Math.min(newY, state.gridRows - room.h));
-  if (!canPlace(grid, newX, newY, room.w, room.h, roomId)) return;
-  pushUndo();
-  removeRoom(grid, roomId);
-  room.x = newX; room.y = newY;
-  placeRoom(grid, roomId, newX, newY, room.w, room.h);
-  renderAll();
-  saveProject(state);
-}
-
-function handleResize(roomId, newGeom) {
-  const room = state.rooms.find(r => r.id === roomId);
-  if (!room || room.cells) return;
-  const x = Math.max(0, newGeom.x);
-  const y = Math.max(0, newGeom.y);
-  const w = Math.max(1, Math.min(newGeom.w, state.gridCols - x));
-  const h = Math.max(1, Math.min(newGeom.h, state.gridRows - y));
-  if (!canPlace(grid, x, y, w, h, roomId)) return;
-  removeRoom(grid, roomId);
-  room.x = x; room.y = y; room.w = w; room.h = h;
-  placeRoom(grid, roomId, room.x, room.y, room.w, room.h);
-  renderAll();
-  saveProject(state);
+  if (!room) return;
+  // セルベース部屋の移動は startRoomMoveDrag で処理
 }
 
 function handleGridChange({ gridCols, gridRows, cellSize }) {
@@ -1131,20 +1046,14 @@ function _rotRect(r, cw, oldCols, oldRows) {
 
 function _rotRoom(r, cw, oldCols, oldRows) {
   const o = { ...r };
-  if (r.cells) {
-    o.cells = r.cells.map(key => {
-      const [c, ro] = key.split(',').map(Number);
-      return cw ? `${oldRows - 1 - ro},${c}` : `${ro},${oldCols - 1 - c}`;
-    });
-    const cs2 = o.cells.map(k => +k.split(',')[0]);
-    const rs2 = o.cells.map(k => +k.split(',')[1]);
-    o.x = Math.min(...cs2); o.y = Math.min(...rs2);
-    o.w = Math.max(...cs2) - o.x + 1; o.h = Math.max(...rs2) - o.y + 1;
-  } else {
-    if (cw) { o.x = oldRows - r.y - r.h; o.y = r.x; }
-    else    { o.x = r.y;                  o.y = oldCols - r.x - r.w; }
-    o.w = r.h; o.h = r.w;
-  }
+  o.cells = r.cells.map(key => {
+    const [c, ro] = key.split(',').map(Number);
+    return cw ? `${oldRows - 1 - ro},${c}` : `${ro},${oldCols - 1 - c}`;
+  });
+  const cs2 = o.cells.map(k => +k.split(',')[0]);
+  const rs2 = o.cells.map(k => +k.split(',')[1]);
+  o.x = Math.min(...cs2); o.y = Math.min(...rs2);
+  o.w = Math.max(...cs2) - o.x + 1; o.h = Math.max(...rs2) - o.y + 1;
   return o;
 }
 
@@ -1241,15 +1150,10 @@ function computeClampedDelta(dx, dy) {
   for (const id of multiSelected) {
     const room = state.rooms.find(r => r.id === id);
     if (room) {
-      if (room.cells) {
-        for (const k of room.cells) {
-          const [c, r] = k.split(',').map(Number);
-          minX = Math.min(minX, c); minY = Math.min(minY, r);
-          maxX = Math.max(maxX, c + 1); maxY = Math.max(maxY, r + 1);
-        }
-      } else {
-        minX = Math.min(minX, room.x); minY = Math.min(minY, room.y);
-        maxX = Math.max(maxX, room.x + room.w); maxY = Math.max(maxY, room.y + room.h);
+      for (const k of room.cells) {
+        const [c, r] = k.split(',').map(Number);
+        minX = Math.min(minX, c); minY = Math.min(minY, r);
+        maxX = Math.max(maxX, c + 1); maxY = Math.max(maxY, r + 1);
       }
       continue;
     }
@@ -1298,20 +1202,14 @@ function commitMultiMove(dx, dy) {
   for (const id of multiSelected) {
     const room = state.rooms.find(r => r.id === id);
     if (room) {
-      if (room.cells) {
-        const newCells = room.cells.map(k => {
-          const [c, r] = k.split(',').map(Number);
-          return `${c+dx},${r+dy}`;
-        });
-        removeRoom(grid, room.id);
-        room.cells = newCells;
-        updateIrregularRoomBounds(room);
-        placeRoomCells(grid, room.id, newCells);
-      } else {
-        removeRoom(grid, room.id);
-        room.x += dx; room.y += dy;
-        placeRoom(grid, room.id, room.x, room.y, room.w, room.h);
-      }
+      const newCells = room.cells.map(k => {
+        const [c, r] = k.split(',').map(Number);
+        return `${c+dx},${r+dy}`;
+      });
+      removeRoom(grid, room.id);
+      room.cells = newCells;
+      updateIrregularRoomBounds(room);
+      placeRoomCells(grid, room.id, newCells);
       continue;
     }
     const stair = state.stairs.find(s => s.id === id);
@@ -1373,8 +1271,8 @@ function updateInspector() {
     return;
   }
 
-  // 建具モード
-  if (state.mode === 'wall' || state.mode === 'lowwall' || state.mode === 'door' || state.mode === 'window') {
+  // 建具モード（ELEMENT_TOOLS に含まれる全種別）
+  if (ELEMENT_TOOLS.some(t => t.id === state.mode)) {
     renderElementInspector(panel);
     return;
   }
@@ -1473,9 +1371,9 @@ function renderElementInspector(panel) {
 function renderAreaSummary(panel) {
   const rows = state.floors.map((fl, fi) => {
     const rooms = (fl.rooms || []).filter(r => !getTypeById(r.typeId).isVoid);
-    const cells = rooms.reduce((s, r) => s + (r.cells ? r.cells.length : r.w * r.h), 0);
-    const tsubo = (cells / 4).toFixed(2);
-    const sqm   = (cells * 0.91 * 0.91).toFixed(1);
+    const cellCount = rooms.reduce((s, r) => s + r.cells.length, 0);
+    const tsubo = (cellCount / 4).toFixed(2);
+    const sqm   = (cellCount * CELL_M * CELL_M).toFixed(1);
     return { fi, count: rooms.length, tsubo, sqm };
   });
   const totalTsubo = rows.reduce((s, r) => s + parseFloat(r.tsubo), 0).toFixed(2);
@@ -1567,48 +1465,6 @@ function renderStairInspector(panel, stair) {
     state.stairs = state.stairs.filter(s => s.id !== stair.id);
     if (p) otherFloor.stairs = otherFloor.stairs.filter(s => s.id !== p.id);
     selectedStairId = null;
-    renderAll(); saveProject(state);
-  });
-}
-
-// ── 矩形部屋インスペクター ────────────────────────────────
-function renderRoomInspector(panel, room) {
-  const type = getTypeById(room.typeId);
-  const { tatami, sqm } = calcArea(room.w, room.h);
-  const isVoid = type.isVoid;
-
-  panel.innerHTML = `
-    <div class="inspector-header">
-      <span class="inspector-icon">${type.icon}</span>
-      <span class="inspector-title">${room.label}${isVoid ? ' <span class="badge-void">吹き抜け</span>' : ''}</span>
-    </div>
-    <div class="inspector-field"><label>部屋名</label><input type="text" id="inp-label" value="${escHtml(room.label)}"></div>
-    <div class="inspector-field"><label>色</label><input type="color" id="inp-color" value="${rgbToHex(room.color)}"></div>
-    ${!isVoid ? `
-    <div class="inspector-field"><label>幅（マス）</label><input type="number" id="inp-w" value="${room.w}" min="1" max="${state.gridCols}"></div>
-    <div class="inspector-field"><label>高さ（マス）</label><input type="number" id="inp-h" value="${room.h}" min="1" max="${state.gridRows}"></div>
-    <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">${room.w}×${room.h}マス</span></div>` : `
-    <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">吹き抜け（面積に含まず）</span></div>`}
-    <button id="btn-delete-room" class="btn-danger btn-full" style="margin-top:8px">この部屋を削除</button>
-  `;
-
-  document.getElementById('inp-label').addEventListener('change', e => { pushUndo(); room.label = e.target.value; renderAll(); saveProject(state); });
-  document.getElementById('inp-color').addEventListener('input', e => {
-    room.color = e.target.value;
-    const el = document.querySelector(`.room-block[data-id="${room.id}"]`);
-    if (el) el.style.backgroundColor = room.color;
-  });
-  document.getElementById('inp-color').addEventListener('change', () => { pushUndo(); saveProject(state); });
-
-  if (!isVoid) {
-    document.getElementById('inp-w').addEventListener('change', e => { handleResize(room.id, { x:room.x, y:room.y, w:Math.max(1,+e.target.value), h:room.h }); });
-    document.getElementById('inp-h').addEventListener('change', e => { handleResize(room.id, { x:room.x, y:room.y, w:room.w, h:Math.max(1,+e.target.value) }); });
-  }
-
-  document.getElementById('btn-delete-room').addEventListener('click', () => {
-    pushUndo(); removeRoom(grid, room.id);
-    state.rooms = state.rooms.filter(r => r.id !== room.id);
-    selectedId = null;
     renderAll(); saveProject(state);
   });
 }
