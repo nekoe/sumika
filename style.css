@@ -280,13 +280,12 @@ body {
   align-items: center;
   gap: 4px;
   padding: 2px 5px;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(3px);
+  background: rgba(255, 255, 255, 0.55);
   pointer-events: all;
   white-space: nowrap;
   overflow: hidden;
-  z-index: 23;
-  min-height: 18px;
+  z-index: 19;
+  min-height: 16px;
 }
 /* 部屋中央アイコン */
 .room-inner {

@@ -441,8 +441,8 @@ function startRoomMoveDrag(e, room) {
 
 // 矩形部屋の四隅リサイズハンドル
 function addCornerHandles(labelEl, room) {
-  const CORNERS = ['nw', 'ne', 'se', 'sw'];
-  const CURSORS  = { nw: 'nw-resize', ne: 'ne-resize', se: 'se-resize', sw: 'sw-resize' };
+  const CORNERS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+  const CURSORS  = { nw: 'nw-resize', n: 'n-resize', ne: 'ne-resize', e: 'e-resize', se: 'se-resize', s: 's-resize', sw: 'sw-resize', w: 'w-resize' };
   for (const dir of CORNERS) {
     const handle = document.createElement('div');
     handle.className = `resize-handle resize-${dir}`;
@@ -675,16 +675,16 @@ function appendIrregularRoom(gridEl, room) {
     cell.dataset.roomId = room.id;
     cell.style.cssText = `left:${col*cs}px;top:${row*cs}px;width:${cs}px;height:${cs}px;background:${room.color};`;
 
-    // 選択されている部屋はドラッグで移動（編集モード・複数選択中を除く）
+    // カーソル下の部屋をそのままドラッグで移動（編集モード・複数選択中を除く）
     cell.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
       if (e.ctrlKey || e.metaKey) return;
       if (multiSelected.size > 0) return;
       if (state.mode !== 'room') return;
       if (editingRoomId === room.id) return;
-      if (selectedId !== room.id) return; // まず選択させる
       e.preventDefault();
       e.stopPropagation();
+      selectRoom(room.id);
       startRoomMoveDrag(e, room);
     });
 
@@ -692,7 +692,7 @@ function appendIrregularRoom(gridEl, room) {
       e.stopPropagation();
       if (e.ctrlKey || e.metaKey) { toggleMultiSelect(room.id); return; }
       if (multiSelected.size > 0) { clearMultiSelected(); return; }
-      selectRoom(room.id);
+      // mousedown で selectRoom 済みのため通常クリックは何もしない
     });
     gridEl.appendChild(cell);
   }
