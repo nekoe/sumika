@@ -508,8 +508,7 @@ function drawMinimap(ctx, state, camPos, yaw) {
   ctx.fillRect(0, 0, S, S);
   if (!state.rooms.length) return;
 
-  let minX=Inf, maxX=-Inf, minZ=Inf, maxZ=-Inf;
-  const Inf = Infinity;
+  let minX=Infinity, maxX=-Infinity, minZ=Infinity, maxZ=-Infinity;
   for (const r of state.rooms) {
     if (r.x < minX) minX = r.x; if (r.x+r.w > maxX) maxX = r.x+r.w;
     if (r.y < minZ) minZ = r.y; if (r.y+r.h > maxZ) maxZ = r.y+r.h;
