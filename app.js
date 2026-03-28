@@ -352,12 +352,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // ユーティリティ
 // ============================================================
 function getGridCell(e) {
-  const gridEl   = document.getElementById('grid');
-  const rect     = gridEl.getBoundingClientRect();
-  const scrollEl = gridEl.parentElement;
+  const rect = document.getElementById('grid').getBoundingClientRect();
   return {
-    col: Math.floor((e.clientX - rect.left  + scrollEl.scrollLeft) / state.cellSize),
-    row: Math.floor((e.clientY - rect.top   + scrollEl.scrollTop)  / state.cellSize),
+    col: Math.floor((e.clientX - rect.left) / state.cellSize),
+    row: Math.floor((e.clientY - rect.top)  / state.cellSize),
   };
 }
 
@@ -515,12 +513,21 @@ function commitRoomResize(room, x, y, w, h) {
 
 // 旧データ（矩形形式）をセルベースに変換
 function normalizeCells(room) {
-  if (room.cells && room.cells.length > 0) return room;
+  if (room.cells && room.cells.length > 0) {
+    // isDoma が未設定の場合はタイプから推定
+    if (room.isDoma === undefined) {
+      room.isDoma = (room.typeId === 'doma' || room.typeId === 'genkan');
+    }
+    return room;
+  }
   const cells = [];
   for (let r = room.y; r < room.y + room.h; r++)
     for (let c = room.x; c < room.x + room.w; c++)
       cells.push(`${c},${r}`);
   room.cells = cells;
+  if (room.isDoma === undefined) {
+    room.isDoma = (room.typeId === 'doma' || room.typeId === 'genkan');
+  }
   return room;
 }
 
@@ -1632,6 +1639,10 @@ function renderIrregularRoomInspector(panel, room) {
       <label>アイコン</label>
       <div class="icon-picker">${iconBtns}</div>
     </div>
+    <div class="inspector-field">
+      <label for="inp-isdoma" title="土間：床を15cm下げて段差を描画">土間（床下げ）</label>
+      <input type="checkbox" id="inp-isdoma" ${room.isDoma ? 'checked' : ''}>
+    </div>
     <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">${room.cells.length}マス</span></div>
     <button id="btn-edit-cells" class="${isEditing ? 'btn-primary' : 'btn-secondary'} btn-full" style="margin-top:6px">${isEditing ? '✅ 編集完了' : '✏️ セルを編集'}</button>
     <div id="edit-cells-hint" style="font-size:11px;color:#64748b;margin:4px 0 0;display:${isEditing ? 'block' : 'none'}">ドラッグ: マスを追加<br>既存のマスをドラッグ: 削除</div>
@@ -1643,6 +1654,11 @@ function renderIrregularRoomInspector(panel, room) {
     document.querySelectorAll(`.room-cell[data-room-id="${room.id}"]`).forEach(el => el.style.backgroundColor = room.color);
   });
   document.getElementById('inp-color').addEventListener('change', () => { pushUndo(); renderAll(); saveProject(state); });
+  document.getElementById('inp-isdoma').addEventListener('change', e => {
+    pushUndo();
+    room.isDoma = e.target.checked;
+    saveProject(state);
+  });
   panel.querySelectorAll('.icon-pick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       pushUndo();

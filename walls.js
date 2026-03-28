@@ -1,10 +1,12 @@
 // walls.js - 壁・ドア・窓のSVGレイヤー
 
 export const ELEMENT_TOOLS = [
-  { id: 'wall',    label: '壁',    icon: '▬', color: '#1e293b' },
-  { id: 'lowwall', label: '腰壁',  icon: '▭', color: '#64748b' },
-  { id: 'door',    label: 'ドア',  icon: '🚪', color: '#92400e' },
-  { id: 'window',  label: '窓',    icon: '🪟', color: '#0ea5e9' },
+  { id: 'wall',        label: '壁',        icon: '▬', color: '#1e293b' },
+  { id: 'lowwall',     label: '腰壁',      icon: '▭', color: '#64748b' },
+  { id: 'door',        label: 'ドア',      icon: '🚪', color: '#92400e' },
+  { id: 'window',      label: '窓(標準)',  icon: '🪟', color: '#0ea5e9' },
+  { id: 'window_tall', label: '掃き出し窓', icon: '🟦', color: '#0284c7' },
+  { id: 'window_low',  label: '高窓',      icon: '🔲', color: '#7dd3fc' },
 ];
 
 // エッジの一意キー: "h:col:row" or "v:col:row"
@@ -86,10 +88,12 @@ function svgLine(parent, x1, y1, x2, y2, cls) {
 }
 
 function renderElement(svgEl, el, cs) {
-  if (el.type === 'wall')    renderWall(svgEl, el.col, el.row, el.dir, cs);
-  if (el.type === 'lowwall') renderLowWall(svgEl, el.col, el.row, el.dir, cs);
-  if (el.type === 'door')    renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false);
-  if (el.type === 'window')  renderWindow(svgEl, el.col, el.row, el.dir, cs);
+  if (el.type === 'wall')        renderWall(svgEl, el.col, el.row, el.dir, cs);
+  if (el.type === 'lowwall')     renderLowWall(svgEl, el.col, el.row, el.dir, cs);
+  if (el.type === 'door')        renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false);
+  if (el.type === 'window')      renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window');
+  if (el.type === 'window_tall') renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window-tall');
+  if (el.type === 'window_low')  renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window-low');
 }
 
 function renderWall(svgEl, col, row, dir, cs) {
@@ -175,9 +179,9 @@ function renderDoor(svgEl, col, row, dir, cs, flip) {
   svgEl.appendChild(g);
 }
 
-function renderWindow(svgEl, col, row, dir, cs) {
+function renderWindow(svgEl, col, row, dir, cs, cls = 'el-window') {
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  g.setAttribute('class', 'el-window');
+  g.setAttribute('class', cls);
   const x = col * cs, y = row * cs;
 
   // 窓記号: 辺の上に3本平行線（外壁・ガラス2枚）

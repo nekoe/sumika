@@ -237,6 +237,7 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
+  position: relative;
 }
 
 #grid {
@@ -739,7 +740,7 @@ body {
   stroke-dasharray: 4 2;
   fill: none;
 }
-/* 窓 */
+/* 窓(標準) */
 .el-window line:nth-child(1),
 .el-window line:nth-child(3) {
   stroke: #0ea5e9;
@@ -748,6 +749,28 @@ body {
 .el-window line:nth-child(2) {
   stroke: #0ea5e9;
   stroke-width: 4;
+}
+/* 掃き出し窓 */
+.el-window-tall line:nth-child(1),
+.el-window-tall line:nth-child(3) {
+  stroke: #0284c7;
+  stroke-width: 2;
+}
+.el-window-tall line:nth-child(2) {
+  stroke: #0284c7;
+  stroke-width: 6;
+}
+/* 高窓 */
+.el-window-low line:nth-child(1),
+.el-window-low line:nth-child(3) {
+  stroke: #38bdf8;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 2;
+}
+.el-window-low line:nth-child(2) {
+  stroke: #38bdf8;
+  stroke-width: 3;
+  stroke-dasharray: 4 2;
 }
 
 /* ホバープレビュー */

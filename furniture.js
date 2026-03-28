@@ -1,7 +1,7 @@
 // 家具タイプ定義
 
 export const FURNITURE_TYPES = [
-  { id: 'kitchen', label: 'キッチン', icon: '🍳', color: '#e2e8e0', defaultW: 3, defaultH: 1, minW: 2, minH: 1 },
+  { id: 'kitchen', label: 'キッチン', icon: '🍳', color: '#e2e8e0', defaultW: 3, defaultH: 1, minW: 1, minH: 1 },
   { id: 'bath',    label: '風呂',     icon: '🛁', color: '#dbeafe', defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
   { id: 'toilet',  label: 'トイレ',   icon: '🚽', color: '#dcfce7', defaultW: 1, defaultH: 2, minW: 1, minH: 1 },
   { id: 'chair',   label: '椅子',     icon: '🪑', color: '#fef3c7', defaultW: 1, defaultH: 1, minW: 1, minH: 1 },

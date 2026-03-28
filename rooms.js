@@ -75,6 +75,7 @@ export function createRoomData(typeId, x, y) {
     h: type.defaultH,
     color: type.color,
     cells,
+    isDoma: type.isDoma ?? false,
   };
 }
 
@@ -94,5 +95,6 @@ export function createIrregularRoomData(typeId, cells) {
     color: type.color,
     cells,
     zones: [],
+    isDoma: type.isDoma ?? false,
   };
 }

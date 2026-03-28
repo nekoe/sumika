@@ -12,7 +12,7 @@ const WIN_HIGH   = 1.8;
 const SPEED      = 4.0;
 const MOUSE_SENS = 0.002;
 const COL_R      = 0.28;
-const DOOR_DIST  = 0.5;
+const DOOR_DIST  = 0.9;
 const STAIR_SPEED = 2.5;  // 階段移動速度 (m/s)
 const STAIR_STEPS = 8;    // 1フロア分の段数
 
@@ -288,8 +288,21 @@ function buildScene(scene, floors, state) {
     generateCeilings(scene, rooms, baseY, aboveVoidCells);
     if (fi > 0) generateFloorSlab(scene, rooms, baseY);
 
+    // 下のフロアのvoidセルキー（吹き抜け上部の壁を下まで延ばすために使用）
+    const belowVoidCells = fi > 0 ? getVoidCells(floors[fi - 1].rooms || []) : new Set();
+
+    // 下のフロアの占有セル（z-fightingを避けるため：1F側が既に吹き抜け外壁を生成済みの位置には2F壁を下げない）
+    const lowerOccupied = fi > 0 ? (() => {
+      const s = new Set();
+      for (const r of (floors[fi - 1].rooms || [])) {
+        if (r.cells) { for (const k of r.cells) s.add(k); }
+        else { for (let rr = r.y; rr < r.y + r.h; rr++) for (let cc = r.x; cc < r.x + r.w; cc++) s.add(`${cc},${rr}`); }
+      }
+      return s;
+    })() : new Set();
+
     // 壁・建具
-    const { wallSegs, doorMap } = generateWalls(scene, { rooms, elements, stairs }, baseY);
+    const { wallSegs, doorMap } = generateWalls(scene, { rooms, elements, stairs }, baseY, belowVoidCells, lowerOccupied);
 
     // 不定形部屋はセルごとにrectを生成（バウンディングボックスより正確な衝突判定）
     // void部屋は歩行不可（吹き抜け）
@@ -374,7 +387,7 @@ const DOMA_DROP = 0.15;  // 土間の床段差（m）
 function generateFloors(scene, rooms, baseY) {
   for (const r of rooms) {
     if (r.typeId === 'void') continue;
-    const isDoma = r.typeId === 'doma' || r.typeId === 'genkan';
+    const isDoma = r.isDoma ?? (r.typeId === 'doma' || r.typeId === 'genkan');
     const floorY = isDoma ? baseY - DOMA_DROP : baseY;
     const mat = new THREE.MeshLambertMaterial({ color: isDoma ? 0xb8b0a4 : toColor(r.color) });
     if (r.cells) {
@@ -487,7 +500,6 @@ function generateZoneFloors(scene, rooms, baseY) {
 function generateCeilings(scene, rooms, baseY, aboveVoidCells = new Set()) {
   const mat = new THREE.MeshLambertMaterial({ color: 0xf8f8f6, side: THREE.DoubleSide });
   for (const r of rooms) {
-    if (r.typeId === 'void') continue;
     if (r.cells) {
       for (const key of r.cells) {
         if (aboveVoidCells.has(key)) continue;
@@ -796,16 +808,28 @@ function genFridge(scene, x, z, fw, fd, baseY) {
 // ─────────────────────────────────────────────────────────
 // 壁・建具生成
 // ─────────────────────────────────────────────────────────
-function generateWalls(scene, floorState, baseY) {
+function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), lowerOccupied = new Set()) {
   const { rooms, elements, stairs } = floorState;
-  const occupied = new Set();
+  const occupied  = new Set();
+  const domaCells = new Set();
+  const voidCells = new Set();
   for (const r of rooms) {
+    const isDoma = r.isDoma ?? (r.typeId === 'doma' || r.typeId === 'genkan');
+    const isVoid = r.typeId === 'void';
     if (r.cells) {
-      for (const key of r.cells) occupied.add(key);
+      for (const key of r.cells) {
+        occupied.add(key);
+        if (isDoma) domaCells.add(key);
+        if (isVoid) voidCells.add(key);
+      }
     } else {
       for (let row = r.y; row < r.y+r.h; row++)
-        for (let col = r.x; col < r.x+r.w; col++)
-          occupied.add(`${col},${row}`);
+        for (let col = r.x; col < r.x+r.w; col++) {
+          const key = `${col},${row}`;
+          occupied.add(key);
+          if (isDoma) domaCells.add(key);
+          if (isVoid) voidCells.add(key);
+        }
     }
   }
   // 階段セルは通行可能エリアとして扱う。ただし外周に壁を生成しないため別セットで管理
@@ -841,18 +865,38 @@ function generateWalls(scene, floorState, baseY) {
     if (added.has(k)) return;
     added.add(k);
     const type = el?.type;
+    // エッジに隣接する両セルを確認（エッジ座標は必ずしもセル座標と一致しない）
+    const cellA = dir === 'h' ? `${col},${row-1}` : `${col-1},${row}`;
+    const cellB = `${col},${row}`;
+    // 隣接セル（空側）が下階の吹き抜けなら壁を1F床まで下げる
+    const neighKey = `${nCol},${nRow}`;
+    // ownCell: このエッジを所有する部屋側のセル（neighKeyの逆側）
+    const ownCell = (cellA === neighKey) ? cellB : cellA;
+    const wallY0 = (domaCells.has(cellA) || domaCells.has(cellB)) ? baseY - DOMA_DROP
+                 : (belowVoidCells.has(neighKey) && lowerOccupied.has(ownCell)) ? baseY - FLOOR_H
+                 : baseY;
+    const wallTop = (voidCells.has(cellA) || voidCells.has(cellB)) ? baseY + FLOOR_H : baseY + WALL_H;
     if (type === 'door') {
-      addDoorGeometry(scene, doorMat, wallMat, dir, col, row, el?.flip || false, wallSegs, doorMap, baseY);
+      addDoorGeometry(scene, doorMat, wallMat, dir, col, row, el?.flip || false, wallSegs, doorMap, wallY0);
     } else if (type === 'window') {
-      addWallSeg(scene, wallMat,  dir, col, row, baseY + 0,        baseY + WIN_LOW);
-      addWallSeg(scene, glassMat, dir, col, row, baseY + WIN_LOW,  baseY + WIN_HIGH);
-      if (WALL_H - WIN_HIGH > 0.02) addWallSeg(scene, wallMat, dir, col, row, baseY + WIN_HIGH, baseY + WALL_H);
+      addWallSeg(scene, wallMat,  dir, col, row, wallY0,            wallY0 + WIN_LOW);
+      addWallSeg(scene, glassMat, dir, col, row, wallY0 + WIN_LOW,  wallY0 + WIN_HIGH);
+      if (WALL_H - WIN_HIGH > 0.02) addWallSeg(scene, wallMat, dir, col, row, wallY0 + WIN_HIGH, wallTop);
+      wallSegs.push({ dir, col, row, open: false });
+    } else if (type === 'window_tall') {
+      addWallSeg(scene, glassMat, dir, col, row, wallY0, wallY0 + 2.0);
+      if (WALL_H - 2.0 > 0.02) addWallSeg(scene, wallMat, dir, col, row, wallY0 + 2.0, wallTop);
+      wallSegs.push({ dir, col, row, open: false });
+    } else if (type === 'window_low') {
+      addWallSeg(scene, wallMat,  dir, col, row, wallY0,        wallY0 + 1.5);
+      addWallSeg(scene, glassMat, dir, col, row, wallY0 + 1.5,  wallY0 + Math.min(2.2, WALL_H));
+      if (WALL_H - 2.2 > 0.02) addWallSeg(scene, wallMat, dir, col, row, wallY0 + 2.2, wallTop);
       wallSegs.push({ dir, col, row, open: false });
     } else if (type === 'lowwall') {
-      addWallSeg(scene, wallMat, dir, col, row, baseY, baseY + WALL_H / 3);
+      addWallSeg(scene, wallMat, dir, col, row, wallY0, wallY0 + WALL_H / 3);
       wallSegs.push({ dir, col, row, open: false });
     } else {
-      addWallSeg(scene, wallMat, dir, col, row, baseY, baseY + WALL_H);
+      addWallSeg(scene, wallMat, dir, col, row, wallY0, wallTop);
       wallSegs.push({ dir, col, row, open: false });
     }
   }
@@ -962,8 +1006,8 @@ function addDoorGeometry(scene, doorMat, wallMat, dir, col, row, flip, wallSegs,
 // ─────────────────────────────────────────────────────────
 function updateDoors(doorMap, camPos, wallSegs) {
   for (const [key, door] of doorMap) {
-    const wx = door.seg.col * CELL + CELL/2;
-    const wz = door.seg.row * CELL + CELL/2;
+    const wx = door.dir === 'h' ? (door.seg.col + 0.5) * CELL : door.seg.col * CELL;
+    const wz = door.dir === 'h' ? door.seg.row * CELL          : (door.seg.row + 0.5) * CELL;
     const dist = Math.sqrt((camPos.x-wx)**2 + (camPos.z-wz)**2);
     door.target = dist < DOOR_DIST ? 88 : 0;
     const speed = 180;
