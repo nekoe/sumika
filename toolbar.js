@@ -3,7 +3,7 @@ import { ELEMENT_TOOLS } from './walls.js';
 
 export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onWalkthrough, onCompassChange }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
-    `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}" style="display:none">${t.icon} ${t.label}</button>`
+    `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
   ).join('');
 
   container.innerHTML = `
