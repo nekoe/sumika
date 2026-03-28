@@ -1,7 +1,7 @@
 // ツールバーUI
 import { ELEMENT_TOOLS } from './walls.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onWalkthrough, onCompassChange }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
     `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
   ).join('');
@@ -11,9 +11,15 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       <button id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>↩ 元に戻す</button>
       <button id="btn-redo" title="やり直す (Ctrl+Y)" disabled>↪ やり直す</button>
     </div>
+    <div class="toolbar-group floor-group">
+      <span class="toolbar-label">フロア:</span>
+      <button class="floor-btn active" data-floor="0">1F</button>
+      <button class="floor-btn" data-floor="1">2F</button>
+    </div>
     <div class="toolbar-group">
       <span class="toolbar-label">モード:</span>
       <button class="mode-btn active" data-mode="room">🏠 部屋配置</button>
+      <button class="mode-btn" data-mode="stair">🪜 階段配置</button>
       <button class="mode-btn" data-mode="element">🔨 壁・建具</button>
     </div>
     <div class="toolbar-group" id="element-tools" style="display:none">
@@ -62,14 +68,29 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   document.getElementById('btn-undo').addEventListener('click', onUndo);
   document.getElementById('btn-redo').addEventListener('click', onRedo);
 
+  // フロア切替
+  container.querySelectorAll('.floor-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fi = +btn.dataset.floor;
+      container.querySelectorAll('.floor-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      onFloorChange(fi);
+    });
+  });
+
   // モード切替
   container.querySelectorAll('.mode-btn[data-mode]').forEach(btn => {
     btn.addEventListener('click', () => {
       container.querySelectorAll('.mode-btn[data-mode]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const isElement = btn.dataset.mode === 'element';
+      const mode = btn.dataset.mode;
+      const isElement = mode === 'element';
       document.getElementById('element-tools').style.display = isElement ? 'flex' : 'none';
-      onModeChange(isElement ? state.elementTool || 'wall' : 'room');
+      if (isElement) {
+        onModeChange(state.elementTool || 'wall');
+      } else {
+        onModeChange(mode);
+      }
     });
   });
 
@@ -82,7 +103,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       onModeChange(btn.dataset.tool);
     });
   });
-  // 初期アクティブ
   const firstTool = container.querySelector('.el-tool-btn');
   if (firstTool) firstTool.classList.add('active');
 
@@ -132,7 +152,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); onUndo(); }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); onRedo(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); onSave(); }
-    // Delete キーは app.js 側で処理
   });
 
   return {
@@ -148,11 +167,19 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       document.getElementById('cell-size').value = s.cellSize;
       document.getElementById('size-val').textContent = s.cellSize + 'px';
     },
+    syncFloor(fi) {
+      container.querySelectorAll('.floor-btn').forEach(b => {
+        b.classList.toggle('active', +b.dataset.floor === fi);
+      });
+    },
     setMode(mode) {
-      // room or element tool id
-      const isElement = mode !== 'room';
+      const isElement = mode !== 'room' && mode !== 'stair';
       container.querySelectorAll('.mode-btn[data-mode]').forEach(b => {
-        b.classList.toggle('active', b.dataset.mode === (isElement ? 'element' : 'room'));
+        const bmode = b.dataset.mode;
+        b.classList.toggle('active',
+          bmode === mode ||
+          (bmode === 'element' && isElement)
+        );
       });
       document.getElementById('element-tools').style.display = isElement ? 'flex' : 'none';
       if (isElement) {

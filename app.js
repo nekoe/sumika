@@ -15,13 +15,21 @@ let state = {
   gridCols: 20,
   gridRows: 15,
   cellSize: 44,
-  rooms: [],
-  elements: [],       // 壁・ドア・窓
-  mode: 'room',       // 'room' | 'wall' | 'door' | 'window'
+  currentFloor: 0,
+  floors: [
+    { rooms: [], elements: [], stairs: [] },
+    { rooms: [], elements: [], stairs: [] },
+  ],
+  mode: 'room',
   elementTool: 'wall',
-  compass: 0,         // 方位（0=北が上）
-  sunHour: 12,        // 時刻（6〜18）
+  compass: 0,
+  sunHour: 12,
 };
+// rooms / elements / stairs は currentFloor のデータへの透過アクセサ
+Object.defineProperty(state, 'rooms',    { get() { return this.floors[this.currentFloor].rooms;    }, set(v) { this.floors[this.currentFloor].rooms    = v; }, enumerable: false });
+Object.defineProperty(state, 'elements', { get() { return this.floors[this.currentFloor].elements; }, set(v) { this.floors[this.currentFloor].elements = v; }, enumerable: false });
+Object.defineProperty(state, 'stairs',   { get() { return this.floors[this.currentFloor].stairs;   }, set(v) { this.floors[this.currentFloor].stairs   = v; }, enumerable: false });
+
 let grid = null;
 let undoStack = [];
 let redoStack = [];
@@ -30,7 +38,6 @@ let svgEl = null;
 let hoveredEdge = null;
 let selectedId = null;
 let selectedZoneId = null;
-let selectedElementId = null;
 
 // ============================================================
 // 初期化
@@ -38,71 +45,124 @@ let selectedElementId = null;
 document.addEventListener('DOMContentLoaded', () => {
   const saved = loadProject();
   if (saved) {
-    state.gridCols  = saved.gridCols  ?? 20;
-    state.gridRows  = saved.gridRows  ?? 15;
-    state.cellSize  = saved.cellSize  ?? 44;
-    state.rooms     = saved.rooms     ?? [];
-    state.elements  = saved.elements  ?? [];
-    state.compass   = saved.compass   ?? 0;
-    state.sunHour   = saved.sunHour   ?? 12;
+    state.gridCols    = saved.gridCols    ?? 20;
+    state.gridRows    = saved.gridRows    ?? 15;
+    state.cellSize    = saved.cellSize    ?? 44;
+    state.compass     = saved.compass     ?? 0;
+    state.sunHour     = saved.sunHour     ?? 12;
+    state.currentFloor = saved.currentFloor ?? 0;
+    if (saved.floors) {
+      state.floors = saved.floors.map(f => ({
+        rooms:    f.rooms    ?? [],
+        elements: f.elements ?? [],
+        stairs:   f.stairs   ?? [],
+      }));
+      // 常に2フロア確保
+      while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [] });
+    } else {
+      // v2 形式からの移行
+      state.floors[0].rooms    = saved.rooms    ?? [];
+      state.floors[0].elements = saved.elements ?? [];
+    }
   }
 
-  grid  = createGrid(state.gridCols, state.gridRows);
+  grid = createGrid(state.gridCols, state.gridRows);
   rebuildGrid(grid, state.rooms);
 
   renderPalette(document.getElementById('palette'));
-
   svgEl = initWallLayer(document.getElementById('grid'));
 
   toolbar = initToolbar({
-    container: document.getElementById('toolbar'),
+    container:        document.getElementById('toolbar'),
     state,
-    onUndo:       undo,
-    onRedo:       redo,
-    onGridChange: handleGridChange,
-    onModeChange: handleModeChange,
-    onSave:       () => { saveProject(state); showToast('保存しました'); },
-    onExport:     () => exportJSON(state),
-    onImport:     file => importJSON(file, data => {
+    onUndo:           undo,
+    onRedo:           redo,
+    onGridChange:     handleGridChange,
+    onModeChange:     handleModeChange,
+    onFloorChange:    handleFloorChange,
+    onSave:           () => { saveProject(state); showToast('保存しました'); },
+    onExport:         () => exportJSON(state),
+    onImport:         file => importJSON(file, data => {
       pushUndo();
-      Object.assign(state, data);
+      state.gridCols     = data.gridCols    ?? state.gridCols;
+      state.gridRows     = data.gridRows    ?? state.gridRows;
+      state.cellSize     = data.cellSize    ?? state.cellSize;
+      state.compass      = data.compass     ?? 0;
+      state.sunHour      = data.sunHour     ?? 12;
+      state.currentFloor = data.currentFloor ?? 0;
+      if (data.floors) {
+        state.floors = data.floors.map(f => ({
+          rooms:    f.rooms    ?? [],
+          elements: f.elements ?? [],
+          stairs:   f.stairs   ?? [],
+        }));
+        while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [] });
+      } else {
+        state.floors[0].rooms    = data.rooms    ?? [];
+        state.floors[0].elements = data.elements ?? [];
+      }
       grid = createGrid(state.gridCols, state.gridRows);
       rebuildGrid(grid, state.rooms);
       renderAll();
       toolbar.syncSliders(state);
+      toolbar.syncFloor(state.currentFloor);
       showToast('読み込みました');
     }, msg => alert(msg)),
-    onWalkthrough:   () => startWalkthrough(state),
-    onCompassChange: () => { renderCompassIndicator(); saveProject(state); },
+    onWalkthrough:    () => startWalkthrough(state),
+    onCompassChange:  () => { renderCompassIndicator(); saveProject(state); },
     onReset: () => {
       pushUndo();
-      state.rooms    = [];
-      state.elements = [];
+      state.floors = [
+        { rooms: [], elements: [], stairs: [] },
+        { rooms: [], elements: [], stairs: [] },
+      ];
+      state.currentFloor = 0;
       resetProject();
       rebuildGrid(grid, state.rooms);
       renderAll();
+      toolbar.syncFloor(0);
     },
   });
 
   initDnd({
-    gridEl:     document.getElementById('grid'),
-    paletteEl:  document.getElementById('palette'),
-    cellSize:   () => state.cellSize,
-    onDropNew:  handleDropNew,
-    onMove:     handleMove,
+    gridEl:    document.getElementById('grid'),
+    paletteEl: document.getElementById('palette'),
+    cellSize:  () => state.cellSize,
+    onDropNew: handleDropNew,
+    onMove:    handleMove,
   });
 
-  // グリッドクリックで選択解除 / 壁・建具配置
+  // グリッドクリックで選択解除 / 壁・建具・階段配置
   document.getElementById('grid').addEventListener('click', e => {
+    if (state.mode === 'stair') {
+      if (!e.target.closest('.stair-block')) {
+        const rect = document.getElementById('grid').getBoundingClientRect();
+        const scrollEl = document.getElementById('grid').parentElement;
+        const col = Math.floor((e.clientX - rect.left + scrollEl.scrollLeft) / state.cellSize);
+        const row = Math.floor((e.clientY - rect.top  + scrollEl.scrollTop)  / state.cellSize);
+        handleStairPlace(col, row);
+      }
+      return;
+    }
     if (state.mode !== 'room') return;
-    if (!e.target.closest('.room-block')) {
-      selectRoom(null);
+    if (!e.target.closest('.room-block')) selectRoom(null);
+  });
+
+  // 階段ブロックのクリック（削除）
+  document.getElementById('grid').addEventListener('click', e => {
+    const sb = e.target.closest('.stair-block');
+    if (sb && state.mode === 'stair') {
+      const id = sb.dataset.id;
+      pushUndo();
+      state.stairs = state.stairs.filter(s => s.id !== id);
+      renderAll();
+      saveProject(state);
     }
   });
 
   // 壁・建具モード: SVGレイヤーのイベント
   svgEl.addEventListener('mousemove', e => {
-    if (state.mode === 'room') return;
+    if (state.mode === 'room' || state.mode === 'stair') return;
     hoveredEdge = getEdgeAt(e, document.getElementById('grid'), state.cellSize);
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
   });
@@ -111,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
   });
   svgEl.addEventListener('click', e => {
-    if (state.mode === 'room') return;
+    if (state.mode === 'room' || state.mode === 'stair') return;
     const edge = getEdgeAt(e, document.getElementById('grid'), state.cellSize);
     if (!edge) return;
     handleElementClick(edge, e);
@@ -135,21 +195,37 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCompassIndicator();
   toolbar.syncSliders(state);
   toolbar.updateUndoRedo(false, false);
+  toolbar.syncFloor(state.currentFloor);
 
   setInterval(() => saveProject(state), 5000);
 });
+
+// ============================================================
+// フロア切替
+// ============================================================
+function handleFloorChange(floorIdx) {
+  pushUndo();
+  state.currentFloor = floorIdx;
+  grid = createGrid(state.gridCols, state.gridRows);
+  rebuildGrid(grid, state.rooms);
+  selectRoom(null);
+  renderAll();
+  toolbar.syncFloor(floorIdx);
+  showToast(`${floorIdx + 1}F を編集中`);
+}
 
 // ============================================================
 // モード切替
 // ============================================================
 function handleModeChange(mode) {
   state.mode = mode;
-  if (mode !== 'room') state.elementTool = mode;
+  if (mode !== 'room' && mode !== 'stair') state.elementTool = mode;
   const gridEl = document.getElementById('grid');
   gridEl.dataset.mode = mode;
-  // パレットのdrag無効化
   document.getElementById('palette').style.pointerEvents = mode === 'room' ? '' : 'none';
-  renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
+  if (mode !== 'stair') {
+    renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
+  }
 }
 
 // ============================================================
@@ -158,6 +234,7 @@ function handleModeChange(mode) {
 function renderAll() {
   applyGridCss();
   renderRooms();
+  renderStairs();
   renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
   updateInspector();
   toolbar?.updateUndoRedo(undoStack.length > 0, redoStack.length > 0);
@@ -170,7 +247,6 @@ function applyGridCss() {
   gridEl.style.height = state.gridRows * cs + 'px';
   gridEl.style.backgroundSize = `${cs}px ${cs}px`;
   document.documentElement.style.setProperty('--cell-size', cs + 'px');
-  // SVGサイズも更新
   if (svgEl) {
     svgEl.setAttribute('width',  state.gridCols * cs);
     svgEl.setAttribute('height', state.gridRows * cs);
@@ -183,6 +259,26 @@ function renderRooms() {
   for (const room of state.rooms) {
     const el = createRoomElement(room);
     gridEl.appendChild(el);
+  }
+}
+
+function renderStairs() {
+  const gridEl = document.getElementById('grid');
+  gridEl.querySelectorAll('.stair-block').forEach(el => el.remove());
+  const cs = state.cellSize;
+  const otherFloorIdx = state.currentFloor === 0 ? 1 : 0;
+  for (const s of state.stairs) {
+    const div = document.createElement('div');
+    div.className = 'stair-block';
+    div.dataset.id = s.id;
+    div.style.cssText = `left:${s.x*cs}px;top:${s.y*cs}px;width:${s.w*cs}px;height:${s.h*cs}px;`;
+    // 対応フロアに階段があるか確認
+    const paired = state.floors[otherFloorIdx].stairs.some(os => os.x === s.x && os.y === s.y);
+    const floorNum = state.currentFloor + 1;
+    const otherFloorNum = otherFloorIdx + 1;
+    div.innerHTML = `<span class="stair-icon">🪜</span><span class="stair-label">${floorNum}F↔${otherFloorNum}F${paired ? '' : ' ⚠'}</span>`;
+    div.title = paired ? `階段（${floorNum}F↔${otherFloorNum}F）\nクリックで削除` : `階段（${otherFloorNum}Fに対応する階段がありません）\nクリックで削除`;
+    gridEl.appendChild(div);
   }
 }
 
@@ -209,7 +305,6 @@ function createRoomElement(room) {
     </div>
   `;
 
-  // ゾーンを描画
   if (room.zones && room.zones.length > 0) {
     renderZones(el, room, cs, {
       onSelectZone: (zoneId) => { selectRoom(room.id); selectZone(zoneId); },
@@ -230,7 +325,6 @@ function createRoomElement(room) {
   });
 
   attachResizeHandles(el, () => state.cellSize, (id, newGeom) => handleResize(id, newGeom));
-
   return el;
 }
 
@@ -264,8 +358,7 @@ function handleDropNew(typeId, col, row) {
   if (!canPlace(grid, col, row, room.w, room.h)) {
     const pos = findFreePosition(grid, room.w, room.h);
     if (!pos) { showToast('空きスペースがありません', 'error'); return; }
-    room.x = pos.x;
-    room.y = pos.y;
+    room.x = pos.x; room.y = pos.y;
   }
   pushUndo();
   state.rooms.push(room);
@@ -299,7 +392,6 @@ function handleResize(roomId, newGeom) {
   if (!canPlace(grid, x, y, w, h, roomId)) return;
   removeRoom(grid, roomId);
   room.x = x; room.y = y; room.w = w; room.h = h;
-  // ゾーンをはみ出さないようにクランプ
   if (room.zones) {
     for (const z of room.zones) {
       z.x = Math.min(z.x, room.w - z.w);
@@ -317,14 +409,30 @@ function handleGridChange({ gridCols, gridRows, cellSize }) {
   state.gridCols = gridCols;
   state.gridRows = gridRows;
   state.cellSize = cellSize;
-  state.rooms = state.rooms.filter(r => r.x + r.w <= gridCols && r.y + r.h <= gridRows);
-  // はみ出た要素を削除
-  state.elements = state.elements.filter(e =>
-    e.col >= 0 && e.col < gridCols && e.row >= 0 && e.row < gridRows
-  );
+  // 全フロアの範囲外データを削除
+  for (const fl of state.floors) {
+    fl.rooms    = fl.rooms.filter(r => r.x + r.w <= gridCols && r.y + r.h <= gridRows);
+    fl.elements = fl.elements.filter(e => e.col >= 0 && e.col < gridCols && e.row >= 0 && e.row < gridRows);
+    fl.stairs   = fl.stairs.filter(s => s.x + s.w <= gridCols && s.y + s.h <= gridRows);
+  }
   grid = createGrid(gridCols, gridRows);
   rebuildGrid(grid, state.rooms);
   renderAll();
+}
+
+function handleStairPlace(col, row) {
+  const w = 2, h = 2;
+  const x = Math.min(Math.max(0, col), state.gridCols - w);
+  const y = Math.min(Math.max(0, row), state.gridRows - h);
+  const existing = state.stairs.findIndex(s => s.x === x && s.y === y);
+  pushUndo();
+  if (existing !== -1) {
+    state.stairs.splice(existing, 1);
+  } else {
+    state.stairs.push({ id: `stair-${Date.now()}`, x, y, w, h });
+  }
+  renderAll();
+  saveProject(state);
 }
 
 function findFreePosition(grid, w, h) {
@@ -342,19 +450,15 @@ function findFreePosition(grid, w, h) {
 function handleElementClick(edge, e) {
   const key = edgeKey(edge.col, edge.row, edge.dir);
   const existIdx = state.elements.findIndex(el => edgeKey(el.col, el.row, el.dir) === key);
-
   pushUndo();
   if (existIdx !== -1) {
     const exist = state.elements[existIdx];
     if (exist.type === state.mode) {
-      // 同じ種類 → 削除
       state.elements.splice(existIdx, 1);
     } else {
-      // 異なる種類 → 置き換え
       state.elements[existIdx] = { id: key, type: state.mode, col: edge.col, row: edge.row, dir: edge.dir };
     }
   } else {
-    // 新規追加
     state.elements.push({ id: key, type: state.mode, col: edge.col, row: edge.row, dir: edge.dir });
   }
   renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
@@ -368,7 +472,6 @@ function selectRoom(id) {
   if (selectedId !== id) selectedZoneId = null;
   selectedId = id;
   updateInspector();
-  // room-block の selected クラスを更新（全再描画を避けるため直接操作）
   document.querySelectorAll('.room-block').forEach(el => {
     el.classList.toggle('selected', el.dataset.id === selectedId);
   });
@@ -382,7 +485,6 @@ function selectZone(zoneId) {
 function updateInspector() {
   const panel = document.getElementById('inspector');
   const room = state.rooms.find(r => r.id === selectedId);
-
   if (!room) {
     panel.innerHTML = `
       <div class="inspector-empty">
@@ -391,18 +493,15 @@ function updateInspector() {
       </div>`;
     return;
   }
-
-  // ゾーンが選択されている場合はゾーンインスペクター
   if (selectedZoneId) {
     const zone = (room.zones || []).find(z => z.id === selectedZoneId);
     if (zone) { renderZoneInspector(panel, room, zone); return; }
   }
-
   renderRoomInspector(panel, room);
 }
 
 // ============================================================
-// コンパスインジケーター（グリッド右下）
+// コンパスインジケーター
 // ============================================================
 function renderCompassIndicator() {
   const wrapper = document.getElementById('canvas-wrapper');
@@ -456,7 +555,6 @@ function renderRoomInspector(panel, room) {
       <strong>${tatami}畳</strong>（${sqm}㎡）<br>
       <span style="font-size:11px;color:#888">${room.w} × ${room.h} マス</span>
     </div>
-
     <div class="inspector-section-title">ゾーン（サブスペース）</div>
     <div id="zone-list">
       ${zones.map(z => `
@@ -493,14 +591,12 @@ function renderRoomInspector(panel, room) {
     handleResize(room.id, { x: room.x, y: room.y, w: room.w, h: Math.max(1, +e.target.value) });
   });
 
-  // ゾーンリスト: クリックで選択
   panel.querySelectorAll('.zone-list-item').forEach(item => {
     item.addEventListener('click', e => {
       if (e.target.closest('.zone-del-btn')) return;
       selectZone(item.dataset.zoneId);
     });
   });
-  // ゾーン削除
   panel.querySelectorAll('.zone-del-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -511,7 +607,6 @@ function renderRoomInspector(panel, room) {
       saveProject(state);
     });
   });
-  // ゾーン追加
   document.getElementById('btn-add-zone').addEventListener('click', () => {
     const sel = document.getElementById('zone-preset');
     const opt = sel.selectedOptions[0];
@@ -520,7 +615,6 @@ function renderRoomInspector(panel, room) {
     pushUndo();
     if (!room.zones) room.zones = [];
     const zone = createZoneData(label, color);
-    // 部屋内に収まる位置
     zone.w = Math.min(2, room.w);
     zone.h = Math.min(2, room.h);
     room.zones.push(zone);
@@ -528,13 +622,11 @@ function renderRoomInspector(panel, room) {
     renderAll();
     saveProject(state);
   });
-
   document.getElementById('btn-delete-room').addEventListener('click', () => {
     pushUndo();
     removeRoom(grid, room.id);
     state.rooms = state.rooms.filter(r => r.id !== room.id);
-    selectedId = null;
-    selectedZoneId = null;
+    selectedId = null; selectedZoneId = null;
     renderAll();
     saveProject(state);
   });
@@ -543,41 +635,19 @@ function renderRoomInspector(panel, room) {
 function renderZoneInspector(panel, room, zone) {
   panel.innerHTML = `
     <div class="inspector-header">
-      <button id="btn-zone-back" title="部屋に戻る" style="font-size:18px;background:none;border:none;cursor:pointer">←</button>
+      <button id="btn-zone-back" style="font-size:18px;background:none;border:none;cursor:pointer">←</button>
       <span class="inspector-title">ゾーン編集</span>
     </div>
-    <div class="inspector-field">
-      <label>ゾーン名</label>
-      <input type="text" id="zone-inp-label" value="${escHtml(zone.label)}">
-    </div>
-    <div class="inspector-field">
-      <label>色</label>
-      <input type="color" id="zone-inp-color" value="${rgbToHex(zone.color)}">
-    </div>
-    <div class="inspector-field">
-      <label>X位置（マス）</label>
-      <input type="number" id="zone-inp-x" value="${zone.x}" min="0" max="${room.w - zone.w}">
-    </div>
-    <div class="inspector-field">
-      <label>Y位置（マス）</label>
-      <input type="number" id="zone-inp-y" value="${zone.y}" min="0" max="${room.h - zone.h}">
-    </div>
-    <div class="inspector-field">
-      <label>幅（マス）</label>
-      <input type="number" id="zone-inp-w" value="${zone.w}" min="1" max="${room.w}">
-    </div>
-    <div class="inspector-field">
-      <label>高さ（マス）</label>
-      <input type="number" id="zone-inp-h" value="${zone.h}" min="1" max="${room.h}">
-    </div>
-    <div class="inspector-info">
-      <strong>${(zone.w * zone.h / 2).toFixed(1)}畳</strong>（${(zone.w * zone.h * 0.83).toFixed(1)}㎡）
-    </div>
+    <div class="inspector-field"><label>ゾーン名</label><input type="text" id="zone-inp-label" value="${escHtml(zone.label)}"></div>
+    <div class="inspector-field"><label>色</label><input type="color" id="zone-inp-color" value="${rgbToHex(zone.color)}"></div>
+    <div class="inspector-field"><label>X位置（マス）</label><input type="number" id="zone-inp-x" value="${zone.x}" min="0" max="${room.w - zone.w}"></div>
+    <div class="inspector-field"><label>Y位置（マス）</label><input type="number" id="zone-inp-y" value="${zone.y}" min="0" max="${room.h - zone.h}"></div>
+    <div class="inspector-field"><label>幅（マス）</label><input type="number" id="zone-inp-w" value="${zone.w}" min="1" max="${room.w}"></div>
+    <div class="inspector-field"><label>高さ（マス）</label><input type="number" id="zone-inp-h" value="${zone.h}" min="1" max="${room.h}"></div>
+    <div class="inspector-info"><strong>${(zone.w * zone.h / 2).toFixed(1)}畳</strong>（${(zone.w * zone.h * 0.83).toFixed(1)}㎡）</div>
     <button id="btn-delete-zone" class="btn-danger btn-full" style="margin-top:8px">ゾーンを削除</button>
   `;
-
   document.getElementById('btn-zone-back').addEventListener('click', () => selectZone(null));
-
   const fields = [
     ['zone-inp-label', 'label', String],
     ['zone-inp-x', 'x', v => Math.max(0, Math.min(+v, room.w - zone.w))],
@@ -608,31 +678,50 @@ function renderZoneInspector(panel, room, zone) {
 // ============================================================
 // Undo/Redo
 // ============================================================
+function snapshotState() {
+  return JSON.stringify({
+    floors:       state.floors,
+    currentFloor: state.currentFloor,
+    gridCols:     state.gridCols,
+    gridRows:     state.gridRows,
+    cellSize:     state.cellSize,
+  });
+}
+
+function restoreSnapshot(snap) {
+  const d = JSON.parse(snap);
+  state.floors       = d.floors;
+  state.currentFloor = d.currentFloor;
+  state.gridCols     = d.gridCols;
+  state.gridRows     = d.gridRows;
+  state.cellSize     = d.cellSize;
+}
+
 function pushUndo() {
-  undoStack.push(JSON.stringify({ rooms: state.rooms, elements: state.elements, gridCols: state.gridCols, gridRows: state.gridRows, cellSize: state.cellSize }));
+  undoStack.push(snapshotState());
   redoStack = [];
 }
 
 function undo() {
   if (undoStack.length === 0) return;
-  redoStack.push(JSON.stringify({ rooms: state.rooms, elements: state.elements, gridCols: state.gridCols, gridRows: state.gridRows, cellSize: state.cellSize }));
-  const prev = JSON.parse(undoStack.pop());
-  Object.assign(state, prev);
+  redoStack.push(snapshotState());
+  restoreSnapshot(undoStack.pop());
   grid = createGrid(state.gridCols, state.gridRows);
   rebuildGrid(grid, state.rooms);
   renderAll();
   toolbar.syncSliders(state);
+  toolbar.syncFloor(state.currentFloor);
 }
 
 function redo() {
   if (redoStack.length === 0) return;
-  undoStack.push(JSON.stringify({ rooms: state.rooms, elements: state.elements, gridCols: state.gridCols, gridRows: state.gridRows, cellSize: state.cellSize }));
-  const next = JSON.parse(redoStack.pop());
-  Object.assign(state, next);
+  undoStack.push(snapshotState());
+  restoreSnapshot(redoStack.pop());
   grid = createGrid(state.gridCols, state.gridRows);
   rebuildGrid(grid, state.rooms);
   renderAll();
   toolbar.syncSliders(state);
+  toolbar.syncFloor(state.currentFloor);
 }
 
 // ============================================================
