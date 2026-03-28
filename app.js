@@ -1,12 +1,12 @@
 import { createGrid, canPlace, canPlaceCells, placeRoom, placeRoomCells, removeRoom, rebuildGrid } from './grid.js';
-import { ROOM_TYPES, renderPalette, createRoomData, createIrregularRoomData, getTypeById, calcArea, calcAreaCells } from './rooms.js';
+import { ROOM_TYPES, renderPalette, createRoomData, getTypeById, calcArea, calcAreaCells } from './rooms.js';
 import { initDnd } from './dnd.js';
 import { attachResizeHandles } from './resize.js';
 import { saveProject, loadProject, exportJSON, importJSON, resetProject } from './storage.js';
 import { initToolbar } from './toolbar.js';
 import { initWallLayer, renderWallLayer, getEdgeAt, edgeKey, ELEMENT_TOOLS } from './walls.js';
-import { renderZones, createZoneData, ZONE_PRESETS } from './zones.js';
 import { startWalkthrough } from './walkthrough.js';
+import { getFurnitureTypeById } from './furniture.js';
 
 // ============================================================
 // 状態
@@ -17,18 +17,20 @@ let state = {
   cellSize: 44,
   currentFloor: 0,
   floors: [
-    { rooms: [], elements: [], stairs: [] },
-    { rooms: [], elements: [], stairs: [] },
+    { rooms: [], elements: [], stairs: [], furniture: [] },
+    { rooms: [], elements: [], stairs: [], furniture: [] },
   ],
   mode: 'room',
   elementTool: 'wall',
+  furnitureType: 'kitchen',
   compass: 0,
   sunHour: 12,
   stairConfig: { w: 2, h: 3, dir: 'n' },
 };
-Object.defineProperty(state, 'rooms',    { get() { return this.floors[this.currentFloor].rooms;    }, set(v) { this.floors[this.currentFloor].rooms    = v; }, enumerable: false });
-Object.defineProperty(state, 'elements', { get() { return this.floors[this.currentFloor].elements; }, set(v) { this.floors[this.currentFloor].elements = v; }, enumerable: false });
-Object.defineProperty(state, 'stairs',   { get() { return this.floors[this.currentFloor].stairs;   }, set(v) { this.floors[this.currentFloor].stairs   = v; }, enumerable: false });
+Object.defineProperty(state, 'rooms',     { get() { return this.floors[this.currentFloor].rooms;     }, set(v) { this.floors[this.currentFloor].rooms     = v; }, enumerable: false });
+Object.defineProperty(state, 'elements',  { get() { return this.floors[this.currentFloor].elements;  }, set(v) { this.floors[this.currentFloor].elements  = v; }, enumerable: false });
+Object.defineProperty(state, 'stairs',    { get() { return this.floors[this.currentFloor].stairs;    }, set(v) { this.floors[this.currentFloor].stairs    = v; }, enumerable: false });
+Object.defineProperty(state, 'furniture', { get() { return this.floors[this.currentFloor].furniture; }, set(v) { this.floors[this.currentFloor].furniture = v; }, enumerable: false });
 
 let grid = null;
 let undoStack = [];
@@ -37,13 +39,17 @@ let toolbar = null;
 let svgEl = null;
 let hoveredEdge = null;
 let selectedId = null;
-let selectedZoneId = null;
 let selectedStairId = null;
+let selectedFurnitureId = null;
+let multiSelected = new Set();
+// 複数選択中の ID 集合（room/stair/furniture）
+let multiMoveDragging = false;
 
-// 不定形描画
-let paintTypeId = null;
-let paintCells  = null;
-let paintCanvas = null;
+// セル編集
+let paintCells    = null;
+let paintMode     = null;   // 'add' | 'remove'
+let paintCanvas   = null;
+let editingRoomId = null;   // セル編集中の部屋ID
 
 // ============================================================
 // 初期化
@@ -60,15 +66,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saved.stairConfig) state.stairConfig = saved.stairConfig;
     if (saved.floors) {
       state.floors = saved.floors.map(f => ({
-        rooms:    f.rooms    ?? [],
-        elements: f.elements ?? [],
-        stairs:   f.stairs   ?? [],
+        rooms:     f.rooms     ?? [],
+        elements:  f.elements  ?? [],
+        stairs:    f.stairs    ?? [],
+        furniture: f.furniture ?? [],
       }));
-      while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [] });
+      while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [], furniture: [] });
     } else {
       state.floors[0].rooms    = saved.rooms    ?? [];
       state.floors[0].elements = saved.elements ?? [];
     }
+    // 旧データ移行：矩形部屋をセルベースに変換
+    state.floors.forEach(f => f.rooms.forEach(r => normalizeCells(r)));
     // 旧データ移行：片フロアにしかない階段を両フロアへ同期
     syncStairsBetweenFloors();
   }
@@ -105,15 +114,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data.stairConfig) state.stairConfig = data.stairConfig;
       if (data.floors) {
         state.floors = data.floors.map(f => ({
-          rooms:    f.rooms    ?? [],
-          elements: f.elements ?? [],
-          stairs:   f.stairs   ?? [],
+          rooms:     f.rooms     ?? [],
+          elements:  f.elements  ?? [],
+          stairs:    f.stairs    ?? [],
+          furniture: f.furniture ?? [],
         }));
-        while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [] });
+        while (state.floors.length < 2) state.floors.push({ rooms: [], elements: [], stairs: [], furniture: [] });
       } else {
         state.floors[0].rooms    = data.rooms    ?? [];
         state.floors[0].elements = data.elements ?? [];
       }
+      // 旧データ移行：矩形部屋をセルベースに変換
+      state.floors.forEach(f => f.rooms.forEach(r => normalizeCells(r)));
       grid = createGrid(state.gridCols, state.gridRows);
       rebuildGrid(grid, state.rooms);
       renderAll();
@@ -122,15 +134,17 @@ document.addEventListener('DOMContentLoaded', () => {
       toolbar.syncStairConfig(state.stairConfig);
       showToast('読み込みました');
     }, msg => alert(msg)),
+    onRotate:        (dir) => rotateFloorPlan(dir > 0),
     onWalkthrough:   () => startWalkthrough(state),
     onCompassChange: () => { renderCompassIndicator(); saveProject(state); },
     onReset: () => {
       pushUndo();
       state.floors = [
-        { rooms: [], elements: [], stairs: [] },
-        { rooms: [], elements: [], stairs: [] },
+        { rooms: [], elements: [], stairs: [], furniture: [] },
+        { rooms: [], elements: [], stairs: [], furniture: [] },
       ];
       state.currentFloor = 0;
+      multiSelected = new Set();
       resetProject();
       rebuildGrid(grid, state.rooms);
       renderAll();
@@ -144,17 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
     cellSize:  () => state.cellSize,
     onDropNew: handleDropNew,
     onMove:    handleMove,
-  });
-
-  // パレットクリック（不定形モード用）
-  document.getElementById('palette').addEventListener('click', e => {
-    if (state.mode !== 'freeroom') return;
-    const item = e.target.closest('.palette-item');
-    if (!item) return;
-    paintTypeId = item.dataset.typeId;
-    document.querySelectorAll('.palette-item').forEach(el => el.classList.remove('paint-active'));
-    item.classList.add('paint-active');
-    showToast(`${getTypeById(paintTypeId).label} を描画中 — ドラッグして形を描いてください`);
   });
 
   // グリッドクリック
@@ -174,40 +177,139 @@ document.addEventListener('DOMContentLoaded', () => {
       handleStairPlace(col, row);
       return;
     }
-    if (state.mode === 'freeroom') return;
+    if (state.mode === 'furniture') {
+      if (e.target.closest('.furniture-block')) return; // furniture block itself handles click
+      // 空きエリアをクリック → 配置
+      const { col, row } = getGridCell(e);
+      handleFurniturePlace(col, row);
+      return;
+    }
     if (state.mode !== 'room') return;
-    if (!e.target.closest('.room-block') && !e.target.closest('.room-cell')) {
+    if (!e.target.closest('.room-block') && !e.target.closest('.room-cell') && !e.target.closest('.stair-block') && !e.target.closest('.furniture-block')) {
+      if (multiSelected.size > 0) { clearMultiSelected(); return; }
       selectRoom(null);
       selectedStairId = null;
     }
   });
 
-  // 不定形描画イベント
+  // キーボード操作（削除・編集終了）
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') { e.preventDefault(); selectAll(); return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFurnitureId && state.mode === 'furniture') {
+      pushUndo();
+      state.furniture = state.furniture.filter(f => f.id !== selectedFurnitureId);
+      selectedFurnitureId = null;
+      renderFurniture();
+      saveProject(state);
+    }
+    if (e.key === 'Escape') {
+      if (multiSelected.size > 0) { clearMultiSelected(); return; }
+      if (editingRoomId) {
+        editingRoomId = null;
+        renderAll();
+        updateInspector();
+      }
+    }
+  });
+
+  // セル編集（editingRoomId が設定されているとき）
   document.getElementById('grid').addEventListener('mousedown', e => {
-    if (state.mode !== 'freeroom') return;
-    if (!paintTypeId) { showToast('左のパレットで部屋タイプを選んでください'); return; }
-    e.preventDefault();
-    paintCells = new Set();
+    if (!editingRoomId || state.mode !== 'room') return;
     const { col, row } = getGridCell(e);
-    tryPaintCell(col, row);
+    const cellKey = `${col},${row}`;
+    const editRoom = state.rooms.find(r => r.id === editingRoomId);
+    if (!editRoom) { editingRoomId = null; return; }
+    e.preventDefault();
+    if (editRoom.cells && editRoom.cells.includes(cellKey)) {
+      paintMode = 'remove';
+      paintCells = new Set([cellKey]);
+    } else {
+      paintMode = 'add';
+      paintCells = new Set();
+      if (col >= 0 && row >= 0 && col < state.gridCols && row < state.gridRows &&
+          grid.cells[row][col] === null) {
+        paintCells.add(cellKey);
+      }
+    }
     renderPaintPreview();
   });
   document.getElementById('grid').addEventListener('mousemove', e => {
-    if (state.mode !== 'freeroom' || !paintCells) return;
+    if (!editingRoomId || state.mode !== 'room' || !paintCells) return;
     const { col, row } = getGridCell(e);
-    tryPaintCell(col, row);
+    const cellKey = `${col},${row}`;
+    const editRoom = state.rooms.find(r => r.id === editingRoomId);
+    if (!editRoom) return;
+    if (paintMode === 'remove') {
+      if (editRoom.cells && editRoom.cells.includes(cellKey)) paintCells.add(cellKey);
+    } else {
+      if (col >= 0 && row >= 0 && col < state.gridCols && row < state.gridRows &&
+          grid.cells[row][col] === null) {
+        paintCells.add(cellKey);
+      }
+    }
     renderPaintPreview();
   });
   document.addEventListener('mouseup', () => {
-    if (state.mode !== 'freeroom' || !paintCells) return;
-    if (paintCells.size > 0) confirmPaint();
+    if (!editingRoomId || !paintCells) return;
+    if (paintCells.size > 0) {
+      const editRoom = state.rooms.find(r => r.id === editingRoomId);
+      if (editRoom) {
+        pushUndo();
+        if (paintMode === 'remove') {
+          const newCells = editRoom.cells.filter(c => !paintCells.has(c));
+          if (newCells.length > 0) {
+            for (const c of paintCells) {
+              const [cc, rr] = c.split(',').map(Number);
+              if (grid.cells[rr] && grid.cells[rr][cc] === editRoom.id) grid.cells[rr][cc] = null;
+            }
+            editRoom.cells = newCells;
+            updateIrregularRoomBounds(editRoom);
+          }
+        } else {
+          for (const c of paintCells) {
+            if (!editRoom.cells.includes(c)) {
+              const [cc, rr] = c.split(',').map(Number);
+              grid.cells[rr][cc] = editRoom.id;
+              editRoom.cells.push(c);
+            }
+          }
+          updateIrregularRoomBounds(editRoom);
+        }
+        renderAll();
+        saveProject(state);
+      }
+    }
     paintCells = null;
+    paintMode  = null;
     renderPaintPreview();
   });
 
+  // 複数選択ドラッグ（キャプチャフェーズで各要素のハンドラより先に処理）
+  document.getElementById('grid').addEventListener('mousedown', e => {
+    if (multiSelected.size === 0) return;
+    if (e.ctrlKey || e.metaKey) return; // Ctrl+Click はトグル処理に任せる
+    if (e.target.closest('.resize-handle') || e.target.closest('.furn-delete')) return;
+    let clickedId = null;
+    const rb = e.target.closest('.room-block');
+    const rc = e.target.closest('.room-cell');
+    const rl = e.target.closest('.room-label-block');
+    const sb = e.target.closest('.stair-block');
+    const fb = e.target.closest('.furniture-block');
+    if (rb)       clickedId = rb.dataset.id;
+    else if (rc)  clickedId = rc.dataset.roomId;
+    else if (rl)  clickedId = rl.dataset.id;
+    else if (sb)  clickedId = sb.dataset.id;
+    else if (fb)  clickedId = fb.dataset.id;
+    if (!clickedId || !multiSelected.has(clickedId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    startMultiMoveDrag(e);
+  }, { capture: true });
+
   // 壁・建具モード
   svgEl.addEventListener('mousemove', e => {
-    if (state.mode === 'room' || state.mode === 'stair' || state.mode === 'freeroom') return;
+    if (state.mode === 'room' || state.mode === 'stair') return;
     hoveredEdge = getEdgeAt(e, document.getElementById('grid'), state.cellSize);
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
   });
@@ -216,7 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
   });
   svgEl.addEventListener('click', e => {
-    if (state.mode === 'room' || state.mode === 'stair' || state.mode === 'freeroom') return;
+    if (state.mode === 'room' || state.mode === 'stair') return;
     const edge = getEdgeAt(e, document.getElementById('grid'), state.cellSize);
     if (!edge) return;
     handleElementClick(edge);
@@ -260,24 +362,166 @@ function getGridCell(e) {
 }
 
 // ============================================================
-// 不定形描画
+// セル編集ユーティリティ
 // ============================================================
-function tryPaintCell(col, row) {
-  if (col < 0 || row < 0 || col >= state.gridCols || row >= state.gridRows) return;
-  if (grid.cells[row][col] !== null) return;
-  paintCells.add(`${col},${row}`);
+function updateIrregularRoomBounds(room) {
+  if (!room.cells || !room.cells.length) return;
+  const cols = room.cells.map(k => +k.split(',')[0]);
+  const rows = room.cells.map(k => +k.split(',')[1]);
+  room.x = Math.min(...cols);
+  room.y = Math.min(...rows);
+  room.w = Math.max(...cols) - room.x + 1;
+  room.h = Math.max(...rows) - room.y + 1;
 }
 
-function confirmPaint() {
-  const cells = [...paintCells];
-  if (!cells.length) return;
+// 部屋のセルが完全な矩形かどうか判定
+function isRectRoom(room) {
+  if (!room.cells || !room.cells.length) return true;
+  if (room.cells.length !== room.w * room.h) return false;
+  const cellSet = new Set(room.cells);
+  for (let r = room.y; r < room.y + room.h; r++)
+    for (let c = room.x; c < room.x + room.w; c++)
+      if (!cellSet.has(`${c},${r}`)) return false;
+  return true;
+}
+
+// 選択部屋のドラッグ移動
+function startRoomMoveDrag(e, room) {
+  const cs = state.cellSize;
+  const startMX = e.clientX, startMY = e.clientY;
+  let lastDx = 0, lastDy = 0;
+  let moved = false;
+
+  const cols = room.cells.map(k => +k.split(',')[0]);
+  const rows = room.cells.map(k => +k.split(',')[1]);
+  const minC = Math.min(...cols), minR = Math.min(...rows);
+  const maxC = Math.max(...cols), maxR = Math.max(...rows);
+
+  const onMove = mv => {
+    const rawDx = Math.round((mv.clientX - startMX) / cs);
+    const rawDy = Math.round((mv.clientY - startMY) / cs);
+    const dx = Math.max(-minC, Math.min(state.gridCols - 1 - maxC, rawDx));
+    const dy = Math.max(-minR, Math.min(state.gridRows - 1 - maxR, rawDy));
+    if (dx === lastDx && dy === lastDy) return;
+    moved = true;
+    lastDx = dx; lastDy = dy;
+    const tx = `translate(${dx*cs}px,${dy*cs}px)`;
+    document.querySelectorAll(`.room-cell[data-room-id="${room.id}"]`).forEach(el => {
+      el.style.transform = tx; el.style.zIndex = '50';
+    });
+    document.querySelectorAll(`.room-label-block[data-id="${room.id}"]`).forEach(el => {
+      el.style.transform = tx; el.style.zIndex = '50';
+    });
+  };
+
+  const onUp = mv => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.querySelectorAll(`.room-cell[data-room-id="${room.id}"], .room-label-block[data-id="${room.id}"]`).forEach(el => {
+      el.style.transform = ''; el.style.zIndex = '';
+    });
+    if (!moved || (lastDx === 0 && lastDy === 0)) return;
+    const newCells = room.cells.map(k => {
+      const [c, r] = k.split(',').map(Number);
+      return `${c+lastDx},${r+lastDy}`;
+    });
+    if (!canPlaceCells(grid, newCells, room.id)) return;
+    pushUndo();
+    removeRoom(grid, room.id);
+    room.cells = newCells;
+    updateIrregularRoomBounds(room);
+    placeRoomCells(grid, room.id, newCells);
+    renderAll();
+    saveProject(state);
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// 矩形部屋の四隅リサイズハンドル
+function addCornerHandles(labelEl, room) {
+  const CORNERS = ['nw', 'ne', 'se', 'sw'];
+  const CURSORS  = { nw: 'nw-resize', ne: 'ne-resize', se: 'se-resize', sw: 'sw-resize' };
+  for (const dir of CORNERS) {
+    const handle = document.createElement('div');
+    handle.className = `resize-handle resize-${dir}`;
+    handle.style.cursor = CURSORS[dir];
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const cs = state.cellSize;
+      const startX = e.clientX, startY = e.clientY;
+      const origX = room.x, origY = room.y, origW = room.w, origH = room.h;
+      let moved = false;
+
+      const onMove = mv => {
+        const dx = Math.round((mv.clientX - startX) / cs);
+        const dy = Math.round((mv.clientY - startY) / cs);
+        if (dx === 0 && dy === 0) return;
+        moved = true;
+        const g = calcCornerResize(dir, origX, origY, origW, origH, dx, dy);
+        const cx = Math.max(0, g.x), cy = Math.max(0, g.y);
+        const cw = Math.max(1, Math.min(g.w, state.gridCols - cx));
+        const ch = Math.max(1, Math.min(g.h, state.gridRows - cy));
+        labelEl.style.left   = `${cx * cs}px`; labelEl.style.top    = `${cy * cs}px`;
+        labelEl.style.width  = `${cw * cs}px`; labelEl.style.height = `${ch * cs}px`;
+      };
+
+      const onUp = mv => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (!moved) return;
+        const dx = Math.round((mv.clientX - startX) / cs);
+        const dy = Math.round((mv.clientY - startY) / cs);
+        const g = calcCornerResize(dir, origX, origY, origW, origH, dx, dy);
+        commitRoomResize(room, g.x, g.y, g.w, g.h);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    labelEl.appendChild(handle);
+  }
+}
+
+function calcCornerResize(dir, x, y, w, h, dx, dy) {
+  let nx = x, ny = y, nw = w, nh = h;
+  if (dir.includes('e')) nw = Math.max(1, w + dx);
+  if (dir.includes('s')) nh = Math.max(1, h + dy);
+  if (dir.includes('w')) { nw = Math.max(1, w - dx); nx = x + (w - nw); }
+  if (dir.includes('n')) { nh = Math.max(1, h - dy); ny = y + (h - nh); }
+  return { x: nx, y: ny, w: nw, h: nh };
+}
+
+function commitRoomResize(room, x, y, w, h) {
+  x = Math.max(0, x);
+  y = Math.max(0, y);
+  w = Math.max(1, Math.min(w, state.gridCols - x));
+  h = Math.max(1, Math.min(h, state.gridRows - y));
+  const newCells = [];
+  for (let r = y; r < y + h; r++)
+    for (let c = x; c < x + w; c++)
+      newCells.push(`${c},${r}`);
+  if (!canPlaceCells(grid, newCells, room.id)) { renderAll(); return; }
   pushUndo();
-  const room = createIrregularRoomData(paintTypeId, cells);
-  state.rooms.push(room);
-  placeRoomCells(grid, room.id, cells);
-  selectRoom(room.id);
+  removeRoom(grid, room.id);
+  room.x = x; room.y = y; room.w = w; room.h = h;
+  room.cells = newCells;
+  placeRoomCells(grid, room.id, newCells);
   renderAll();
   saveProject(state);
+}
+
+// 旧データ（矩形形式）をセルベースに変換
+function normalizeCells(room) {
+  if (room.cells && room.cells.length > 0) return room;
+  const cells = [];
+  for (let r = room.y; r < room.y + room.h; r++)
+    for (let c = room.x; c < room.x + room.w; c++)
+      cells.push(`${c},${r}`);
+  room.cells = cells;
+  return room;
 }
 
 function renderPaintPreview() {
@@ -287,11 +531,16 @@ function renderPaintPreview() {
   paintCanvas.height = state.gridRows * cs;
   const ctx = paintCanvas.getContext('2d');
   ctx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
-  if (!paintCells || !paintCells.size) return;
-  const type = getTypeById(paintTypeId);
-  ctx.fillStyle   = type.color + 'cc';
-  ctx.strokeStyle = '#2563eb';
-  ctx.lineWidth   = 2;
+  if (!paintCells || !paintCells.size || !editingRoomId) return;
+  if (paintMode === 'remove') {
+    ctx.fillStyle   = 'rgba(239,68,68,0.45)';
+    ctx.strokeStyle = '#dc2626';
+  } else {
+    const editRoom = state.rooms.find(r => r.id === editingRoomId);
+    ctx.fillStyle   = (editRoom?.color ?? '#cccccc') + 'cc';
+    ctx.strokeStyle = '#16a34a';
+  }
+  ctx.lineWidth = 2;
   for (const key of paintCells) {
     const [c, r] = key.split(',').map(Number);
     ctx.fillRect(c*cs, r*cs, cs, cs);
@@ -336,6 +585,7 @@ function handleFloorChange(floorIdx) {
   pushUndo();
   state.currentFloor = floorIdx;
   selectedStairId    = null;
+  multiSelected      = new Set();
   grid = createGrid(state.gridCols, state.gridRows);
   rebuildGrid(grid, state.rooms);
   selectRoom(null);
@@ -349,18 +599,21 @@ function handleFloorChange(floorIdx) {
 // ============================================================
 function handleModeChange(mode) {
   state.mode = mode;
-  if (mode !== 'room' && mode !== 'stair' && mode !== 'freeroom') state.elementTool = mode;
-  if (mode !== 'freeroom') {
-    paintCells = null;
-    renderPaintPreview();
-    document.querySelectorAll('.palette-item').forEach(el => el.classList.remove('paint-active'));
-  }
+  if (mode !== 'room' && mode !== 'stair' && mode !== 'furniture') state.elementTool = mode;
+  paintCells = null;
+  paintMode  = null;
+  editingRoomId = null;
+  renderPaintPreview();
   if (mode !== 'stair') selectedStairId = null;
+  if (mode !== 'furniture') {
+    selectedFurnitureId = null;
+    renderFurniture();
+  }
   const gridEl = document.getElementById('grid');
   gridEl.dataset.mode = mode;
-  document.getElementById('palette').style.pointerEvents = (mode === 'room' || mode === 'freeroom') ? '' : 'none';
+  document.getElementById('palette').style.pointerEvents = mode === 'room' ? '' : 'none';
   document.querySelectorAll('.palette-item').forEach(el => el.draggable = (mode === 'room'));
-  if (mode !== 'stair' && mode !== 'freeroom') {
+  if (mode !== 'stair') {
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
   }
   updateInspector();
@@ -373,6 +626,7 @@ function renderAll() {
   applyGridCss();
   renderRooms();
   renderStairs();
+  renderFurniture();
   renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
   updateInspector();
   toolbar?.updateUndoRedo(undoStack.length > 0, redoStack.length > 0);
@@ -399,38 +653,76 @@ function renderRooms() {
   const gridEl = document.getElementById('grid');
   gridEl.querySelectorAll('.room-block, .room-cell, .room-label-block').forEach(el => el.remove());
   for (const room of state.rooms) {
-    if (room.cells) appendIrregularRoom(gridEl, room);
-    else            gridEl.appendChild(createRoomElement(room));
+    appendIrregularRoom(gridEl, room);
   }
 }
 
 function appendIrregularRoom(gridEl, room) {
   const cs = state.cellSize;
   const isSelected = room.id === selectedId;
+  const isEditing = editingRoomId === room.id;
+  const isRoomMultiSel = multiSelected.has(room.id);
   const type = getTypeById(room.typeId);
+
   for (const key of room.cells) {
     const [col, row] = key.split(',').map(Number);
     const cell = document.createElement('div');
-    cell.className = 'room-cell' + (isSelected ? ' room-cell-selected' : '') + (type.isVoid ? ' room-cell-void' : '');
+    cell.className = 'room-cell'
+      + (isSelected ? ' room-cell-selected' : '')
+      + (type.isVoid ? ' room-cell-void' : '')
+      + (isEditing ? ' room-cell-editing' : '')
+      + (isRoomMultiSel ? ' multi-selected' : '');
     cell.dataset.roomId = room.id;
     cell.style.cssText = `left:${col*cs}px;top:${row*cs}px;width:${cs}px;height:${cs}px;background:${room.color};`;
-    cell.addEventListener('click', e => { e.stopPropagation(); selectRoom(room.id); selectZone(null); });
+
+    // 選択されている部屋はドラッグで移動（編集モード・複数選択中を除く）
+    cell.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      if (e.ctrlKey || e.metaKey) return;
+      if (multiSelected.size > 0) return;
+      if (state.mode !== 'room') return;
+      if (editingRoomId === room.id) return;
+      if (selectedId !== room.id) return; // まず選択させる
+      e.preventDefault();
+      e.stopPropagation();
+      startRoomMoveDrag(e, room);
+    });
+
+    cell.addEventListener('click', e => {
+      e.stopPropagation();
+      if (e.ctrlKey || e.metaKey) { toggleMultiSelect(room.id); return; }
+      if (multiSelected.size > 0) { clearMultiSelected(); return; }
+      selectRoom(room.id);
+    });
     gridEl.appendChild(cell);
   }
+
   const { tatami, sqm } = calcAreaCells(room.cells);
   const label = document.createElement('div');
-  label.className = 'room-label-block';
+  label.className = 'room-label-block'
+    + (isSelected ? ' room-label-selected' : '')
+    + (isRoomMultiSel ? ' multi-selected' : '');
   label.dataset.id = room.id;
+  label.dataset.x = room.x; label.dataset.y = room.y;
+  label.dataset.w = room.w; label.dataset.h = room.h;
   label.style.cssText = `left:${room.x*cs}px;top:${room.y*cs}px;width:${room.w*cs}px;height:${room.h*cs}px;`;
   label.innerHTML = `
+    <div class="room-top-strip">
+      <span class="room-label" title="${room.label}">${room.label}</span>
+      <span class="room-area">${tatami}畳<span class="room-sqm"> (${sqm}㎡)</span></span>
+    </div>
     <div class="room-inner">
       <div class="room-icon">${type.icon}</div>
-      <div class="room-label" title="${room.label}">${room.label}</div>
-      <div class="room-area">${tatami}畳 <span class="room-sqm">(${sqm}㎡)</span></div>
     </div>`;
-  label.querySelector('.room-label').addEventListener('dblclick', e => {
+  label.querySelector('.room-top-strip .room-label').addEventListener('dblclick', e => {
     e.stopPropagation(); startLabelEditIrregular(label, room);
   });
+
+  // 矩形の場合：四隅のリサイズハンドル（選択時にCSSで表示）
+  if (isRectRoom(room)) {
+    addCornerHandles(label, room);
+  }
+
   gridEl.appendChild(label);
 }
 
@@ -443,7 +735,7 @@ function renderStairs() {
   for (const s of state.stairs) {
     const div = document.createElement('div');
     const isSelected = s.id === selectedStairId;
-    div.className = 'stair-block' + (isSelected ? ' stair-selected' : '');
+    div.className = 'stair-block' + (isSelected ? ' stair-selected' : '') + (multiSelected.has(s.id) ? ' multi-selected' : '');
     div.dataset.id = s.id;
     div.style.cssText = `left:${s.x*cs}px;top:${s.y*cs}px;width:${s.w*cs}px;height:${s.h*cs}px;`;
     const paired = state.floors[otherFloorIdx].stairs.some(os => os.x === s.x && os.y === s.y);
@@ -477,6 +769,8 @@ function renderStairs() {
         document.removeEventListener('mouseup', onUp);
         if (!moved) {
           // クリックとして扱う（選択）
+          if (mv.ctrlKey || mv.metaKey) { toggleMultiSelect(s.id); return; }
+          if (multiSelected.size > 0) { clearMultiSelected(); return; }
           selectedStairId = (selectedStairId === s.id) ? null : s.id;
           updateInspector();
           renderStairs();
@@ -506,17 +800,145 @@ function renderStairs() {
   }
 }
 
+// ============================================================
+// 家具
+// ============================================================
+function renderFurniture() {
+  const gridEl = document.getElementById('grid');
+  gridEl.querySelectorAll('.furniture-block').forEach(el => el.remove());
+  const cs = state.cellSize;
+  for (const furn of (state.furniture || [])) {
+    const ftype = getFurnitureTypeById(furn.typeId);
+    const div = document.createElement('div');
+    const isSelected = furn.id === selectedFurnitureId;
+    div.className = 'furniture-block' + (isSelected ? ' selected' : '') + (multiSelected.has(furn.id) ? ' multi-selected' : '');
+    div.dataset.id = furn.id;
+    div.dataset.x  = furn.x; div.dataset.y = furn.y;
+    div.dataset.w  = furn.w; div.dataset.h = furn.h;
+    div.style.cssText = `left:${furn.x*cs}px;top:${furn.y*cs}px;width:${furn.w*cs}px;height:${furn.h*cs}px;background-color:${ftype.color};`;
+    div.innerHTML = `
+      <span class="furn-icon">${ftype.icon}</span>
+      <span class="furn-label">${ftype.label}</span>
+      <button class="furn-delete" title="削除">×</button>`;
+
+    // 削除ボタン
+    div.querySelector('.furn-delete').addEventListener('click', e => {
+      e.stopPropagation();
+      pushUndo();
+      state.furniture = state.furniture.filter(f => f.id !== furn.id);
+      selectedFurnitureId = null;
+      renderFurniture();
+      saveProject(state);
+    });
+
+    // クリックで選択
+    div.addEventListener('click', e => {
+      if (e.target.closest('.resize-handle')) return;
+      e.stopPropagation();
+      if (e.ctrlKey || e.metaKey) { toggleMultiSelect(furn.id); return; }
+      if (multiSelected.size > 0) { clearMultiSelected(); return; }
+      if (state.mode !== 'furniture') return;
+      selectedFurnitureId = (selectedFurnitureId === furn.id) ? null : furn.id;
+      renderFurniture();
+    });
+
+    // ドラッグで移動
+    div.addEventListener('mousedown', e => {
+      if (state.mode !== 'furniture') return;
+      if (e.target.closest('.resize-handle') || e.target.closest('.furn-delete')) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const origX = furn.x, origY = furn.y;
+      const startMX = e.clientX, startMY = e.clientY;
+      let moved = false;
+      const onMove = mv => {
+        const dx = Math.round((mv.clientX - startMX) / cs);
+        const dy = Math.round((mv.clientY - startMY) / cs);
+        if (dx === 0 && dy === 0) return;
+        moved = true;
+        const nx = Math.max(0, Math.min(state.gridCols - furn.w, origX + dx));
+        const ny = Math.max(0, Math.min(state.gridRows - furn.h, origY + dy));
+        div.style.left = `${nx * cs}px`;
+        div.style.top  = `${ny * cs}px`;
+      };
+      const onUp = mv => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (!moved) return;
+        const dx = Math.round((mv.clientX - startMX) / cs);
+        const dy = Math.round((mv.clientY - startMY) / cs);
+        const nx = Math.max(0, Math.min(state.gridCols - furn.w, origX + dx));
+        const ny = Math.max(0, Math.min(state.gridRows - furn.h, origY + dy));
+        if (nx !== origX || ny !== origY) {
+          pushUndo();
+          furn.x = nx; furn.y = ny;
+          div.dataset.x = nx; div.dataset.y = ny;
+          saveProject(state);
+        }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // リサイズ開始時に1回 undo を記録
+    div.addEventListener('mousedown', e => {
+      if (e.target.closest('.resize-handle')) pushUndo();
+    });
+
+    // リサイズハンドル（resize.js 流用）— 要素を再生成せずインライン更新
+    attachResizeHandles(div, () => state.cellSize, (id, g) => {
+      const f = state.furniture.find(f => f.id === id);
+      if (!f) return;
+      const ftype2 = getFurnitureTypeById(f.typeId);
+      const x = Math.max(0, g.x);
+      const y = Math.max(0, g.y);
+      const w = Math.max(ftype2.minW, Math.min(g.w, state.gridCols - x));
+      const h = Math.max(ftype2.minH, Math.min(g.h, state.gridRows - y));
+      f.x = x; f.y = y; f.w = w; f.h = h;
+      const cs = state.cellSize;
+      const el = document.querySelector(`.furniture-block[data-id="${id}"]`);
+      if (el) {
+        el.style.left   = `${x * cs}px`; el.style.top    = `${y * cs}px`;
+        el.style.width  = `${w * cs}px`; el.style.height = `${h * cs}px`;
+        el.dataset.x = x; el.dataset.y = y; el.dataset.w = w; el.dataset.h = h;
+      }
+      saveProject(state);
+    });
+
+    gridEl.appendChild(div);
+  }
+}
+
+function handleFurniturePlace(col, row) {
+  const ftype = getFurnitureTypeById(state.furnitureType);
+  const x = Math.min(Math.max(0, col), state.gridCols - ftype.defaultW);
+  const y = Math.min(Math.max(0, row), state.gridRows - ftype.defaultH);
+  pushUndo();
+  const newFurn = {
+    id:     `furn-${Date.now()}`,
+    typeId: ftype.id,
+    x, y,
+    w: ftype.defaultW,
+    h: ftype.defaultH,
+  };
+  state.furniture.push(newFurn);
+  selectedFurnitureId = newFurn.id;
+  renderFurniture();
+  saveProject(state);
+}
+
 function createRoomElement(room) {
   const cs = state.cellSize;
   const type = getTypeById(room.typeId);
   const { tatami, sqm } = calcArea(room.w, room.h);
   const el = document.createElement('div');
-  el.className = 'room-block' + (room.id === selectedId ? ' selected' : '') + (type.isVoid ? ' room-void' : '');
+  const isMultiSel = multiSelected.has(room.id);
+  el.className = 'room-block' + (room.id === selectedId ? ' selected' : '') + (type.isVoid ? ' room-void' : '') + (isMultiSel ? ' multi-selected' : '');
   el.dataset.id     = room.id;
   el.dataset.typeId = room.typeId;
   el.dataset.x = room.x; el.dataset.y = room.y;
   el.dataset.w = room.w; el.dataset.h = room.h;
-  el.draggable = (state.mode === 'room');
+  el.draggable = (state.mode === 'room') && multiSelected.size === 0;
   el.style.cssText = `left:${room.x*cs}px;top:${room.y*cs}px;width:${room.w*cs}px;height:${room.h*cs}px;background-color:${room.color};`;
   el.innerHTML = `
     <div class="room-inner">
@@ -524,16 +946,12 @@ function createRoomElement(room) {
       <div class="room-label" title="${room.label}">${room.label}</div>
       <div class="room-area">${tatami}畳 <span class="room-sqm">(${sqm}㎡)</span></div>
     </div>`;
-  if (room.zones && room.zones.length > 0) {
-    renderZones(el, room, cs, {
-      onSelectZone: (zoneId) => { selectRoom(room.id); selectZone(zoneId); },
-      onZoneUpdate: () => { saveProject(state); renderAll(); },
-    });
-  }
   el.addEventListener('click', e => {
-    if (e.target.closest('.resize-handle') || e.target.closest('.zone-block')) return;
+    if (e.target.closest('.resize-handle')) return;
     e.stopPropagation();
-    selectRoom(room.id); selectZone(null);
+    if (e.ctrlKey || e.metaKey) { toggleMultiSelect(room.id); return; }
+    if (multiSelected.size > 0) { clearMultiSelected(); return; }
+    selectRoom(room.id);
   });
   el.querySelector('.room-label').addEventListener('dblclick', e => { e.stopPropagation(); startLabelEdit(el, room); });
   attachResizeHandles(el, () => state.cellSize, (id, g) => handleResize(id, g));
@@ -565,15 +983,23 @@ function startLabelEditIrregular(labelDiv, room) {
 // 部屋操作
 // ============================================================
 function handleDropNew(typeId, col, row) {
+  const type = getTypeById(typeId);
+  col = Math.max(0, Math.min(col, state.gridCols - type.defaultW));
+  row = Math.max(0, Math.min(row, state.gridRows - type.defaultH));
   const room = createRoomData(typeId, col, row);
-  if (!canPlace(grid, col, row, room.w, room.h)) {
+  if (!canPlaceCells(grid, room.cells)) {
     const pos = findFreePosition(grid, room.w, room.h);
     if (!pos) { showToast('空きスペースがありません', 'error'); return; }
     room.x = pos.x; room.y = pos.y;
+    const cells = [];
+    for (let r = pos.y; r < pos.y + room.h; r++)
+      for (let c = pos.x; c < pos.x + room.w; c++)
+        cells.push(`${c},${r}`);
+    room.cells = cells;
   }
   pushUndo();
   state.rooms.push(room);
-  placeRoom(grid, room.id, room.x, room.y, room.w, room.h);
+  placeRoomCells(grid, room.id, room.cells);
   selectRoom(room.id);
   renderAll();
   saveProject(state);
@@ -603,12 +1029,6 @@ function handleResize(roomId, newGeom) {
   if (!canPlace(grid, x, y, w, h, roomId)) return;
   removeRoom(grid, roomId);
   room.x = x; room.y = y; room.w = w; room.h = h;
-  if (room.zones) {
-    for (const z of room.zones) {
-      z.x = Math.min(z.x, room.w-z.w); z.y = Math.min(z.y, room.h-z.h);
-      z.w = Math.min(z.w, room.w-z.x); z.h = Math.min(z.h, room.h-z.y);
-    }
-  }
   placeRoom(grid, roomId, room.x, room.y, room.w, room.h);
   renderAll();
   saveProject(state);
@@ -631,8 +1051,9 @@ function handleGridChange({ gridCols, gridRows, cellSize }) {
       }
       return r.x+r.w <= gridCols && r.y+r.h <= gridRows;
     });
-    fl.elements = fl.elements.filter(e => e.col >= 0 && e.col < gridCols && e.row >= 0 && e.row < gridRows);
-    fl.stairs   = fl.stairs.filter(s => s.x+s.w <= gridCols && s.y+s.h <= gridRows);
+    fl.elements  = fl.elements.filter(e => e.col >= 0 && e.col < gridCols && e.row >= 0 && e.row < gridRows);
+    fl.stairs    = fl.stairs.filter(s => s.x+s.w <= gridCols && s.y+s.h <= gridRows);
+    if (fl.furniture) fl.furniture = fl.furniture.filter(f => f.x+f.w <= gridCols && f.y+f.h <= gridRows);
   }
   grid = createGrid(gridCols, gridRows);
   rebuildGrid(grid, state.rooms);
@@ -668,6 +1089,80 @@ function handleStairPlace(col, row) {
   saveProject(state);
 }
 
+// ============================================================
+// 回転
+// ============================================================
+function rotateFloorPlan(cw) {
+  pushUndo();
+  const oldCols = state.gridCols;
+  const oldRows = state.gridRows;
+  state.gridCols = oldRows;
+  state.gridRows = oldCols;
+
+  for (const fl of state.floors) {
+    fl.rooms     = fl.rooms.map(r => _rotRoom(r, cw, oldCols, oldRows));
+    fl.elements  = fl.elements.map(el => _rotEl(el, cw, oldCols, oldRows));
+    fl.stairs    = fl.stairs.map(s => _rotStair(s, cw, oldCols, oldRows));
+    if (fl.furniture) fl.furniture = fl.furniture.map(f => _rotRect(f, cw, oldCols, oldRows));
+  }
+
+  grid = createGrid(state.gridCols, state.gridRows);
+  rebuildGrid(grid, state.rooms);
+  renderAll();
+  toolbar.syncSliders(state);
+  saveProject(state);
+}
+
+function _rotRect(r, cw, oldCols, oldRows) {
+  const o = { ...r };
+  if (cw) { o.x = oldRows - r.y - r.h; o.y = r.x; }
+  else    { o.x = r.y;                  o.y = oldCols - r.x - r.w; }
+  o.w = r.h; o.h = r.w;
+  return o;
+}
+
+function _rotRoom(r, cw, oldCols, oldRows) {
+  const o = { ...r };
+  if (r.cells) {
+    o.cells = r.cells.map(key => {
+      const [c, ro] = key.split(',').map(Number);
+      return cw ? `${oldRows - 1 - ro},${c}` : `${ro},${oldCols - 1 - c}`;
+    });
+    const cs2 = o.cells.map(k => +k.split(',')[0]);
+    const rs2 = o.cells.map(k => +k.split(',')[1]);
+    o.x = Math.min(...cs2); o.y = Math.min(...rs2);
+    o.w = Math.max(...cs2) - o.x + 1; o.h = Math.max(...rs2) - o.y + 1;
+  } else {
+    if (cw) { o.x = oldRows - r.y - r.h; o.y = r.x; }
+    else    { o.x = r.y;                  o.y = oldCols - r.x - r.w; }
+    o.w = r.h; o.h = r.w;
+  }
+  return o;
+}
+
+function _rotEl(el, cw, oldCols, oldRows) {
+  const o = { ...el };
+  if (cw) {
+    if (el.dir === 'h') { o.dir = 'v'; o.col = oldRows - el.row;     o.row = el.col; }
+    else                { o.dir = 'h'; o.col = oldRows - el.row - 1; o.row = el.col; }
+  } else {
+    if (el.dir === 'h') { o.dir = 'v'; o.col = el.row; o.row = oldCols - el.col - 1; }
+    else                { o.dir = 'h'; o.col = el.row; o.row = oldCols - el.col; }
+  }
+  o.id = edgeKey(o.col, o.row, o.dir);
+  return o;
+}
+
+function _rotStair(s, cw, oldCols, oldRows) {
+  const CW  = { n:'e', e:'s', s:'w', w:'n' };
+  const CCW = { n:'w', w:'s', s:'e', e:'n' };
+  const o = { ...s };
+  if (cw) { o.x = oldRows - s.y - s.h; o.y = s.x; o.dir = CW[s.dir  || 'n']; }
+  else    { o.x = s.y;                  o.y = oldCols - s.x - s.w; o.dir = CCW[s.dir || 'n']; }
+  o.w = s.h; o.h = s.w;
+  return o;
+}
+
 function findFreePosition(grid, w, h) {
   for (let r = 0; r <= grid.rows - h; r++)
     for (let c = 0; c <= grid.cols - w; c++)
@@ -690,6 +1185,7 @@ function handleElementClick(edge) {
     state.elements.push({ id: key, type: state.mode, col: edge.col, row: edge.row, dir: edge.dir });
   }
   renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
+  updateInspector();
   saveProject(state);
 }
 
@@ -697,17 +1193,164 @@ function handleElementClick(edge) {
 // 選択管理
 // ============================================================
 function selectRoom(id) {
-  if (selectedId !== id) selectedZoneId = null;
   selectedId = id;
   if (id) selectedStairId = null;
   updateInspector();
-  document.querySelectorAll('.room-block').forEach(el => el.classList.toggle('selected', el.dataset.id === selectedId));
   document.querySelectorAll('.room-cell').forEach(el => el.classList.toggle('room-cell-selected', el.dataset.roomId === selectedId));
+  document.querySelectorAll('.room-label-block').forEach(el => el.classList.toggle('room-label-selected', el.dataset.id === selectedId));
 }
 
-function selectZone(zoneId) {
-  selectedZoneId = zoneId;
+// ============================================================
+// 複数選択
+// ============================================================
+function selectAll() {
+  multiSelected = new Set();
+  for (const r of state.rooms) multiSelected.add(r.id);
+  for (const s of state.stairs) multiSelected.add(s.id);
+  for (const f of (state.furniture || [])) multiSelected.add(f.id);
+  selectedId = null; selectedStairId = null; selectedFurnitureId = null;
+  renderAll();
+  showToast(`${multiSelected.size}個を選択 — ドラッグで一括移動、Escでキャンセル`);
+}
+
+function toggleMultiSelect(id) {
+  if (multiSelected.has(id)) multiSelected.delete(id);
+  else multiSelected.add(id);
+  selectedId = null; selectedStairId = null; selectedFurnitureId = null;
+  renderAll();
   updateInspector();
+}
+
+function clearMultiSelected() {
+  if (multiSelected.size === 0) return;
+  multiSelected = new Set();
+  renderAll();
+  updateInspector();
+}
+
+function computeClampedDelta(dx, dy) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const id of multiSelected) {
+    const room = state.rooms.find(r => r.id === id);
+    if (room) {
+      if (room.cells) {
+        for (const k of room.cells) {
+          const [c, r] = k.split(',').map(Number);
+          minX = Math.min(minX, c); minY = Math.min(minY, r);
+          maxX = Math.max(maxX, c + 1); maxY = Math.max(maxY, r + 1);
+        }
+      } else {
+        minX = Math.min(minX, room.x); minY = Math.min(minY, room.y);
+        maxX = Math.max(maxX, room.x + room.w); maxY = Math.max(maxY, room.y + room.h);
+      }
+      continue;
+    }
+    const stair = state.stairs.find(s => s.id === id);
+    if (stair) {
+      minX = Math.min(minX, stair.x); minY = Math.min(minY, stair.y);
+      maxX = Math.max(maxX, stair.x + stair.w); maxY = Math.max(maxY, stair.y + stair.h);
+      continue;
+    }
+    const furn = (state.furniture || []).find(f => f.id === id);
+    if (furn) {
+      minX = Math.min(minX, furn.x); minY = Math.min(minY, furn.y);
+      maxX = Math.max(maxX, furn.x + furn.w); maxY = Math.max(maxY, furn.y + furn.h);
+    }
+  }
+  if (minX === Infinity) return { dx: 0, dy: 0 };
+  dx = Math.max(-minX, Math.min(state.gridCols - maxX, dx));
+  dy = Math.max(-minY, Math.min(state.gridRows - maxY, dy));
+  return { dx, dy };
+}
+
+function applyMultiMovePreview(dx, dy) {
+  const cs = state.cellSize;
+  for (const id of multiSelected) {
+    const tx = `translate(${dx*cs}px,${dy*cs}px)`;
+    document.querySelectorAll(`.room-block[data-id="${id}"]`).forEach(el => { el.style.transform = tx; el.style.zIndex = '100'; });
+    document.querySelectorAll(`.room-cell[data-room-id="${id}"]`).forEach(el => { el.style.transform = tx; el.style.zIndex = '100'; });
+    document.querySelectorAll(`.room-label-block[data-id="${id}"]`).forEach(el => { el.style.transform = tx; });
+    document.querySelectorAll(`.stair-block[data-id="${id}"]`).forEach(el => { el.style.transform = tx; el.style.zIndex = '100'; });
+    document.querySelectorAll(`.furniture-block[data-id="${id}"]`).forEach(el => { el.style.transform = tx; el.style.zIndex = '100'; });
+  }
+}
+
+function clearMultiMovePreview() {
+  for (const id of multiSelected) {
+    document.querySelectorAll(`.room-block[data-id="${id}"], .room-cell[data-room-id="${id}"], .room-label-block[data-id="${id}"], .stair-block[data-id="${id}"], .furniture-block[data-id="${id}"]`).forEach(el => {
+      el.style.transform = '';
+      el.style.zIndex = '';
+    });
+  }
+}
+
+function commitMultiMove(dx, dy) {
+  if (dx === 0 && dy === 0) return;
+  pushUndo();
+  for (const id of multiSelected) {
+    const room = state.rooms.find(r => r.id === id);
+    if (room) {
+      if (room.cells) {
+        const newCells = room.cells.map(k => {
+          const [c, r] = k.split(',').map(Number);
+          return `${c+dx},${r+dy}`;
+        });
+        removeRoom(grid, room.id);
+        room.cells = newCells;
+        updateIrregularRoomBounds(room);
+        placeRoomCells(grid, room.id, newCells);
+      } else {
+        removeRoom(grid, room.id);
+        room.x += dx; room.y += dy;
+        placeRoom(grid, room.id, room.x, room.y, room.w, room.h);
+      }
+      continue;
+    }
+    const stair = state.stairs.find(s => s.id === id);
+    if (stair) {
+      const otherFloorIdx = state.currentFloor === 0 ? 1 : 0;
+      const paired = state.floors[otherFloorIdx].stairs.find(s => s.x === stair.x && s.y === stair.y);
+      stair.x += dx; stair.y += dy;
+      if (paired) { paired.x = stair.x; paired.y = stair.y; }
+      continue;
+    }
+    const furn = (state.furniture || []).find(f => f.id === id);
+    if (furn) { furn.x += dx; furn.y += dy; }
+  }
+  renderAll();
+  saveProject(state);
+}
+
+function startMultiMoveDrag(e) {
+  const cs = state.cellSize;
+  const startMX = e.clientX, startMY = e.clientY;
+  let moved = false;
+  let lastDx = 0, lastDy = 0;
+  multiMoveDragging = true;
+
+  const onMove = mv => {
+    const rawDx = Math.round((mv.clientX - startMX) / cs);
+    const rawDy = Math.round((mv.clientY - startMY) / cs);
+    if (rawDx === 0 && rawDy === 0) return;
+    moved = true;
+    const { dx, dy } = computeClampedDelta(rawDx, rawDy);
+    if (dx === lastDx && dy === lastDy) return;
+    lastDx = dx; lastDy = dy;
+    applyMultiMovePreview(dx, dy);
+  };
+  const onUp = mv => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    multiMoveDragging = false;
+    clearMultiMovePreview();
+    if (!moved) { clearMultiSelected(); return; }
+    const rawDx = Math.round((mv.clientX - startMX) / cs);
+    const rawDy = Math.round((mv.clientY - startMY) / cs);
+    const { dx, dy } = computeClampedDelta(rawDx, rawDy);
+    commitMultiMove(dx, dy);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
 }
 
 // ============================================================
@@ -715,6 +1358,18 @@ function selectZone(zoneId) {
 // ============================================================
 function updateInspector() {
   const panel = document.getElementById('inspector');
+
+  // 複数選択中（2個以上）
+  if (multiSelected.size >= 2) {
+    renderMultiSelectInspector(panel);
+    return;
+  }
+
+  // 建具モード
+  if (state.mode === 'wall' || state.mode === 'lowwall' || state.mode === 'door' || state.mode === 'window') {
+    renderElementInspector(panel);
+    return;
+  }
 
   // 階段選択中
   if (selectedStairId && state.mode === 'stair') {
@@ -727,12 +1382,83 @@ function updateInspector() {
     renderAreaSummary(panel);
     return;
   }
-  if (selectedZoneId) {
-    const zone = (room.zones || []).find(z => z.id === selectedZoneId);
-    if (zone) { renderZoneInspector(panel, room, zone); return; }
-  }
-  if (room.cells) renderIrregularRoomInspector(panel, room);
-  else            renderRoomInspector(panel, room);
+  renderIrregularRoomInspector(panel, room);
+}
+
+// ── 複数選択インスペクター ────────────────────────────────
+function renderMultiSelectInspector(panel) {
+  const rooms  = state.rooms.filter(r => multiSelected.has(r.id));
+  const stairs = state.stairs.filter(s => multiSelected.has(s.id));
+  const furns  = (state.furniture || []).filter(f => multiSelected.has(f.id));
+  panel.innerHTML = `
+    <div class="inspector-header">
+      <span class="inspector-icon">🔲</span>
+      <span class="inspector-title">複数選択</span>
+    </div>
+    <div class="inspector-info">
+      <strong>${multiSelected.size}個</strong>を選択中<br>
+      <span style="font-size:11px;color:#888">
+        部屋${rooms.length} ／ 階段${stairs.length} ／ 家具${furns.length}
+      </span><br>
+      <span style="font-size:11px;color:#888">ドラッグで一括移動</span>
+    </div>
+    <button id="btn-multi-all" class="btn-secondary btn-full" style="margin-top:8px">全選択 (Ctrl+A)</button>
+    <button id="btn-multi-clear" class="btn-secondary btn-full" style="margin-top:4px">選択解除 (Esc)</button>
+  `;
+  document.getElementById('btn-multi-all').addEventListener('click', selectAll);
+  document.getElementById('btn-multi-clear').addEventListener('click', clearMultiSelected);
+}
+
+// ── 建具インスペクター ────────────────────────────────────
+function renderElementInspector(panel) {
+  const els = state.elements;
+  const counts = {};
+  for (const t of ELEMENT_TOOLS) counts[t.id] = els.filter(e => e.type === t.id).length;
+  const total = els.length;
+
+  const rows = ELEMENT_TOOLS.map(t => `
+    <div class="el-insp-row">
+      <span class="el-insp-icon">${t.icon}</span>
+      <span class="el-insp-label">${t.label}</span>
+      <span class="el-insp-count">${counts[t.id]}</span>
+      <button class="btn-danger el-insp-del" data-type="${t.id}" ${counts[t.id] === 0 ? 'disabled' : ''}>削除</button>
+    </div>`).join('');
+
+  panel.innerHTML = `
+    <div class="inspector-header">
+      <span class="inspector-icon">🔨</span>
+      <span class="inspector-title">建具</span>
+    </div>
+    <div class="inspector-info" style="margin-bottom:6px">
+      合計 <strong>${total}</strong> 個
+    </div>
+    <div class="el-insp-list">${rows}</div>
+    <button id="btn-del-all-elements" class="btn-danger btn-full" style="margin-top:10px" ${total === 0 ? 'disabled' : ''}>
+      🗑️ 全建具を削除
+    </button>
+  `;
+
+  panel.querySelectorAll('.el-insp-del[data-type]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      const label = ELEMENT_TOOLS.find(t => t.id === type)?.label ?? type;
+      if (!confirm(`現在のフロアの「${label}」をすべて削除しますか？`)) return;
+      pushUndo();
+      state.elements = state.elements.filter(e => e.type !== type);
+      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
+      saveProject(state);
+      renderElementInspector(panel);
+    });
+  });
+
+  document.getElementById('btn-del-all-elements')?.addEventListener('click', () => {
+    if (!confirm('現在のフロアの建具をすべて削除しますか？')) return;
+    pushUndo();
+    state.elements = [];
+    renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
+    saveProject(state);
+    renderElementInspector(panel);
+  });
 }
 
 // ── 間取り概要（選択なし時）────────────────────────────────
@@ -750,7 +1476,7 @@ function renderAreaSummary(panel) {
   panel.innerHTML = `
     <div class="inspector-empty">
       <p>部屋をクリックして選択</p>
-      <p class="hint">パレットから部屋をドラッグ、<br>または「不定形」モードで自由描画</p>
+      <p class="hint">パレットから部屋をドラッグして配置<br>選択後「✏️ セルを編集」で形を変更</p>
     </div>
     <div class="area-summary">
       <div class="area-summary-title">間取り面積</div>
@@ -841,7 +1567,6 @@ function renderStairInspector(panel, stair) {
 function renderRoomInspector(panel, room) {
   const type = getTypeById(room.typeId);
   const { tatami, sqm } = calcArea(room.w, room.h);
-  const zones = room.zones || [];
   const isVoid = type.isVoid;
 
   panel.innerHTML = `
@@ -854,21 +1579,8 @@ function renderRoomInspector(panel, room) {
     ${!isVoid ? `
     <div class="inspector-field"><label>幅（マス）</label><input type="number" id="inp-w" value="${room.w}" min="1" max="${state.gridCols}"></div>
     <div class="inspector-field"><label>高さ（マス）</label><input type="number" id="inp-h" value="${room.h}" min="1" max="${state.gridRows}"></div>
-    <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">${room.w}×${room.h}マス</span></div>
-    <div class="inspector-section-title">ゾーン（サブスペース）</div>
-    <div id="zone-list">${zones.map(z=>`
-      <div class="zone-list-item" data-zone-id="${z.id}">
-        <span class="zone-list-color" style="background:${z.color}"></span>
-        <span class="zone-list-label">${escHtml(z.label)}</span>
-        <button class="zone-del-btn" data-zone-id="${z.id}">×</button>
-      </div>`).join('')}</div>
-    <div class="inspector-field" style="margin-top:6px">
-      <label>追加するゾーン</label>
-      <select id="zone-preset">${ZONE_PRESETS.map(p=>`<option value="${p.label}" data-color="${p.color}">${p.label}</option>`).join('')}</select>
-    </div>
-    <button id="btn-add-zone" class="btn-secondary btn-full">＋ ゾーンを追加</button>` : `
-    <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">吹き抜け（面積に含まず）</span></div>
-    `}
+    <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">${room.w}×${room.h}マス</span></div>` : `
+    <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">吹き抜け（面積に含まず）</span></div>`}
     <button id="btn-delete-room" class="btn-danger btn-full" style="margin-top:8px">この部屋を削除</button>
   `;
 
@@ -883,48 +1595,32 @@ function renderRoomInspector(panel, room) {
   if (!isVoid) {
     document.getElementById('inp-w').addEventListener('change', e => { handleResize(room.id, { x:room.x, y:room.y, w:Math.max(1,+e.target.value), h:room.h }); });
     document.getElementById('inp-h').addEventListener('change', e => { handleResize(room.id, { x:room.x, y:room.y, w:room.w, h:Math.max(1,+e.target.value) }); });
-    panel.querySelectorAll('.zone-list-item').forEach(item => {
-      item.addEventListener('click', e => { if (e.target.closest('.zone-del-btn')) return; selectZone(item.dataset.zoneId); });
-    });
-    panel.querySelectorAll('.zone-del-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation(); pushUndo();
-        room.zones = (room.zones||[]).filter(z => z.id !== btn.dataset.zoneId);
-        if (selectedZoneId === btn.dataset.zoneId) selectedZoneId = null;
-        renderAll(); saveProject(state);
-      });
-    });
-    document.getElementById('btn-add-zone').addEventListener('click', () => {
-      const sel = document.getElementById('zone-preset');
-      pushUndo();
-      if (!room.zones) room.zones = [];
-      const zone = createZoneData(sel.value, sel.selectedOptions[0].dataset.color||'#E0E0E0');
-      zone.w = Math.min(2, room.w); zone.h = Math.min(2, room.h);
-      room.zones.push(zone);
-      selectZone(zone.id); renderAll(); saveProject(state);
-    });
   }
 
   document.getElementById('btn-delete-room').addEventListener('click', () => {
     pushUndo(); removeRoom(grid, room.id);
     state.rooms = state.rooms.filter(r => r.id !== room.id);
-    selectedId = null; selectedZoneId = null;
+    selectedId = null;
     renderAll(); saveProject(state);
   });
 }
 
-// ── 不定形部屋インスペクター ──────────────────────────────
+// ── 部屋インスペクター ────────────────────────────────────
 function renderIrregularRoomInspector(panel, room) {
   const type = getTypeById(room.typeId);
   const { tatami, sqm } = calcAreaCells(room.cells);
+  const isEditing = editingRoomId === room.id;
+  const isVoid = type.isVoid;
   panel.innerHTML = `
     <div class="inspector-header">
       <span class="inspector-icon">${type.icon}</span>
-      <span class="inspector-title">${room.label} <span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px">不定形</span></span>
+      <span class="inspector-title">${room.label}${isVoid ? ' <span class="badge-void">吹き抜け</span>' : ''}</span>
     </div>
     <div class="inspector-field"><label>部屋名</label><input type="text" id="inp-label" value="${escHtml(room.label)}"></div>
     <div class="inspector-field"><label>色</label><input type="color" id="inp-color" value="${rgbToHex(room.color)}"></div>
-    <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">${room.cells.length}マス（不定形）</span></div>
+    <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">${room.cells.length}マス</span></div>
+    <button id="btn-edit-cells" class="${isEditing ? 'btn-primary' : 'btn-secondary'} btn-full" style="margin-top:6px">${isEditing ? '✅ 編集完了' : '✏️ セルを編集'}</button>
+    <div id="edit-cells-hint" style="font-size:11px;color:#64748b;margin:4px 0 0;display:${isEditing ? 'block' : 'none'}">ドラッグ: マスを追加<br>既存のマスをドラッグ: 削除</div>
     <button id="btn-delete-room" class="btn-danger btn-full" style="margin-top:8px">この部屋を削除</button>
   `;
   document.getElementById('inp-label').addEventListener('change', e => { pushUndo(); room.label = e.target.value; renderAll(); saveProject(state); });
@@ -933,48 +1629,21 @@ function renderIrregularRoomInspector(panel, room) {
     document.querySelectorAll(`.room-cell[data-room-id="${room.id}"]`).forEach(el => el.style.backgroundColor = room.color);
   });
   document.getElementById('inp-color').addEventListener('change', () => { pushUndo(); renderAll(); saveProject(state); });
+  document.getElementById('btn-edit-cells').addEventListener('click', () => {
+    if (editingRoomId === room.id) {
+      editingRoomId = null;
+    } else {
+      editingRoomId = room.id;
+      showToast(`「${room.label}」のセルを編集中 — ドラッグで追加、既存セルをドラッグで削除`);
+    }
+    renderAll();
+    updateInspector();
+  });
   document.getElementById('btn-delete-room').addEventListener('click', () => {
+    if (editingRoomId === room.id) editingRoomId = null;
     pushUndo(); removeRoom(grid, room.id);
     state.rooms = state.rooms.filter(r => r.id !== room.id);
     selectedId = null; renderAll(); saveProject(state);
-  });
-}
-
-// ── ゾーンインスペクター ──────────────────────────────────
-function renderZoneInspector(panel, room, zone) {
-  panel.innerHTML = `
-    <div class="inspector-header">
-      <button id="btn-zone-back" style="font-size:18px;background:none;border:none;cursor:pointer">←</button>
-      <span class="inspector-title">ゾーン編集</span>
-    </div>
-    <div class="inspector-field"><label>ゾーン名</label><input type="text" id="zone-inp-label" value="${escHtml(zone.label)}"></div>
-    <div class="inspector-field"><label>色</label><input type="color" id="zone-inp-color" value="${rgbToHex(zone.color)}"></div>
-    <div class="inspector-field"><label>X位置</label><input type="number" id="zone-inp-x" value="${zone.x}" min="0" max="${room.w-zone.w}"></div>
-    <div class="inspector-field"><label>Y位置</label><input type="number" id="zone-inp-y" value="${zone.y}" min="0" max="${room.h-zone.h}"></div>
-    <div class="inspector-field"><label>幅</label><input type="number" id="zone-inp-w" value="${zone.w}" min="1" max="${room.w}"></div>
-    <div class="inspector-field"><label>高さ</label><input type="number" id="zone-inp-h" value="${zone.h}" min="1" max="${room.h}"></div>
-    <div class="inspector-info"><strong>${(zone.w*zone.h/2).toFixed(1)}畳</strong></div>
-    <button id="btn-delete-zone" class="btn-danger btn-full" style="margin-top:8px">ゾーンを削除</button>
-  `;
-  document.getElementById('btn-zone-back').addEventListener('click', () => selectZone(null));
-  const fields = [
-    ['zone-inp-label','label',String],
-    ['zone-inp-x','x',v=>Math.max(0,Math.min(+v,room.w-zone.w))],
-    ['zone-inp-y','y',v=>Math.max(0,Math.min(+v,room.h-zone.h))],
-    ['zone-inp-w','w',v=>Math.max(1,Math.min(+v,room.w-zone.x))],
-    ['zone-inp-h','h',v=>Math.max(1,Math.min(+v,room.h-zone.y))],
-  ];
-  for (const [id,prop,conv] of fields) {
-    document.getElementById(id)?.addEventListener('change', e => { pushUndo(); zone[prop]=conv(e.target.value); renderAll(); saveProject(state); });
-  }
-  document.getElementById('zone-inp-color').addEventListener('input', e => {
-    zone.color = e.target.value;
-    const el = document.querySelector(`.zone-block[data-id="${zone.id}"]`);
-    if (el) el.style.backgroundColor = zone.color;
-  });
-  document.getElementById('zone-inp-color').addEventListener('change', () => { pushUndo(); saveProject(state); });
-  document.getElementById('btn-delete-zone').addEventListener('click', () => {
-    pushUndo(); room.zones = (room.zones||[]).filter(z=>z.id!==zone.id); selectedZoneId=null; renderAll(); saveProject(state);
   });
 }
 
@@ -1011,12 +1680,14 @@ function pushUndo() { undoStack.push(snapshotState()); redoStack = []; }
 function undo() {
   if (!undoStack.length) return;
   redoStack.push(snapshotState()); restoreSnapshot(undoStack.pop());
+  multiSelected = new Set();
   grid = createGrid(state.gridCols, state.gridRows); rebuildGrid(grid, state.rooms);
   renderAll(); toolbar.syncSliders(state); toolbar.syncFloor(state.currentFloor); toolbar.syncStairConfig(state.stairConfig);
 }
 function redo() {
   if (!redoStack.length) return;
   undoStack.push(snapshotState()); restoreSnapshot(redoStack.pop());
+  multiSelected = new Set();
   grid = createGrid(state.gridCols, state.gridRows); rebuildGrid(grid, state.rooms);
   renderAll(); toolbar.syncSliders(state); toolbar.syncFloor(state.currentFloor); toolbar.syncStairConfig(state.stairConfig);
 }

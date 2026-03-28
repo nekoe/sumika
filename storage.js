@@ -47,8 +47,9 @@ export function loadProject() {
       // v3: zones フィールド補完
       for (const fl of data.floors) {
         if (fl.rooms) fl.rooms = fl.rooms.map(r => ({ zones: [], ...r }));
-        if (!fl.elements) fl.elements = [];
-        if (!fl.stairs)   fl.stairs   = [];
+        if (!fl.elements)   fl.elements   = [];
+        if (!fl.stairs)     fl.stairs     = [];
+        if (!fl.furniture)  fl.furniture  = [];
       }
     }
     return data;
@@ -87,8 +88,9 @@ export function importJSON(file, onSuccess, onError) {
       // floors 形式
       if (data.floors) {
         for (const fl of data.floors) {
-          if (!fl.elements) fl.elements = [];
-          if (!fl.stairs)   fl.stairs   = [];
+          if (!fl.elements)  fl.elements  = [];
+          if (!fl.stairs)    fl.stairs    = [];
+          if (!fl.furniture) fl.furniture = [];
         }
         onSuccess(data);
         return;
@@ -96,8 +98,8 @@ export function importJSON(file, onSuccess, onError) {
       // 旧形式
       if (!data.rooms || !data.gridCols) throw new Error('無効なファイル形式');
       data.floors = [
-        { rooms: data.rooms, elements: data.elements || [], stairs: [] },
-        { rooms: [], elements: [], stairs: [] },
+        { rooms: data.rooms, elements: data.elements || [], stairs: [], furniture: [] },
+        { rooms: [], elements: [], stairs: [], furniture: [] },
       ];
       data.currentFloor = 0;
       onSuccess(data);

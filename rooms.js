@@ -11,7 +11,8 @@ export const ROOM_TYPES = [
   { id: 'bathroom', label: '浴室',       defaultW: 2, defaultH: 2, color: '#E0F7FA', icon: '🛁' },
   { id: 'toilet',   label: 'トイレ',     defaultW: 1, defaultH: 2, color: '#E8F5E9', icon: '🚽' },
   { id: 'washroom', label: '洗面所',     defaultW: 2, defaultH: 2, color: '#E1F5FE', icon: '🚿' },
-  { id: 'genkan',   label: '玄関',       defaultW: 2, defaultH: 2, color: '#FFF8E1', icon: '🚪' },
+  { id: 'genkan',   label: '玄関',       defaultW: 2, defaultH: 2, color: '#FFF8E1', icon: '🚪', isDoma: true },
+  { id: 'doma',     label: '土間',       defaultW: 2, defaultH: 2, color: '#D6D0C8', icon: '👟', isDoma: true },
   { id: 'corridor', label: '廊下',       defaultW: 1, defaultH: 4, color: '#F5F5F5', icon: '➡️' },
   { id: 'storage',  label: '納戸/WIC',   defaultW: 2, defaultH: 2, color: '#EFEBE9', icon: '📦' },
   { id: 'garage',   label: '駐車場',     defaultW: 3, defaultH: 4, color: '#ECEFF1', icon: '🚗' },
@@ -61,6 +62,10 @@ export function generateId() {
 
 export function createRoomData(typeId, x, y) {
   const type = getTypeById(typeId);
+  const cells = [];
+  for (let r = y; r < y + type.defaultH; r++)
+    for (let c = x; c < x + type.defaultW; c++)
+      cells.push(`${c},${r}`);
   return {
     id: generateId(),
     typeId,
@@ -69,7 +74,7 @@ export function createRoomData(typeId, x, y) {
     w: type.defaultW,
     h: type.defaultH,
     color: type.color,
-    zones: [],
+    cells,
   };
 }
 

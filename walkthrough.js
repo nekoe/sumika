@@ -266,11 +266,12 @@ function buildScene(scene, floors, state) {
   for (let fi = 0; fi < floors.length; fi++) {
     const fl = floors[fi];
     const baseY = fi * FLOOR_H;
-    const rooms    = fl.rooms    || [];
-    const elements = fl.elements || [];
-    const stairs   = fl.stairs   || [];
+    const rooms     = fl.rooms     || [];
+    const elements  = fl.elements  || [];
+    const stairs    = fl.stairs    || [];
+    const furniture = fl.furniture || [];
 
-    if (rooms.length === 0 && stairs.length === 0 && fi > 0) {
+    if (rooms.length === 0 && stairs.length === 0 && furniture.length === 0 && fi > 0) {
       floorData.push({ wallSegs: [], doorMap: new Map(), roomRects: [] });
       continue;
     }
@@ -312,6 +313,9 @@ function buildScene(scene, floors, state) {
     for (const s of stairs) {
       generateStair(scene, s, baseY, fi);
     }
+
+    // 家具ジオメトリ
+    generateFurnitureItems(scene, furniture, baseY);
   }
 
   // 階段エリアの登録
@@ -364,26 +368,80 @@ function toColor(hex) {
   try { return new THREE.Color(hex); } catch { return new THREE.Color(0xffffff); }
 }
 
+const DOMA_DROP = 0.15;  // 土間の床段差（m）
+
 function generateFloors(scene, rooms, baseY) {
   for (const r of rooms) {
     if (r.typeId === 'void') continue;
-    const mat = new THREE.MeshLambertMaterial({ color: toColor(r.color) });
+    const isDoma = r.typeId === 'doma' || r.typeId === 'genkan';
+    const floorY = isDoma ? baseY - DOMA_DROP : baseY;
+    const mat = new THREE.MeshLambertMaterial({ color: isDoma ? 0xb8b0a4 : toColor(r.color) });
     if (r.cells) {
-      // 不定形: セルごとに床パネル
       for (const key of r.cells) {
         const [col, row] = key.split(',').map(Number);
         const m = new THREE.Mesh(new THREE.PlaneGeometry(CELL, CELL), mat);
         m.rotation.x = -Math.PI / 2;
-        m.position.set((col + 0.5)*CELL, baseY + 0.001, (row + 0.5)*CELL);
+        m.position.set((col + 0.5)*CELL, floorY + 0.001, (row + 0.5)*CELL);
         m.receiveShadow = true;
         scene.add(m);
       }
+      // 土間: セルの縁に段差側面を追加
+      if (isDoma) addDomaEdges(scene, r.cells, baseY);
     } else {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w * CELL, r.h * CELL), mat);
       m.rotation.x = -Math.PI / 2;
-      m.position.set((r.x + r.w/2)*CELL, baseY + 0.001, (r.y + r.h/2)*CELL);
+      m.position.set((r.x + r.w/2)*CELL, floorY + 0.001, (r.y + r.h/2)*CELL);
       m.receiveShadow = true;
       scene.add(m);
+      // 土間: 外周に段差側面を追加
+      if (isDoma) addDomaRect(scene, r.x, r.y, r.w, r.h, baseY);
+    }
+  }
+}
+
+// 矩形土間の外周段差側面
+function addDomaRect(scene, rx, ry, rw, rh, baseY) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0x8a8278 });
+  const y   = baseY - DOMA_DROP / 2;
+  const x0  = rx * CELL, z0 = ry * CELL;
+  const x1  = (rx + rw) * CELL, z1 = (ry + rh) * CELL;
+  // 北・南辺
+  for (const [zPos, zRot] of [[z0, 0], [z1, Math.PI]]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(rw * CELL, DOMA_DROP), mat);
+    m.rotation.y = zRot;
+    m.position.set((x0 + x1) / 2, y, zPos);
+    scene.add(m);
+  }
+  // 西・東辺
+  for (const [xPos, yRot] of [[x0, -Math.PI/2], [x1, Math.PI/2]]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(rh * CELL, DOMA_DROP), mat);
+    m.rotation.y = yRot;
+    m.position.set(xPos, y, (z0 + z1) / 2);
+    scene.add(m);
+  }
+}
+
+// 不定形土間の外縁段差側面
+function addDomaEdges(scene, cells, baseY) {
+  const mat  = new THREE.MeshLambertMaterial({ color: 0x8a8278 });
+  const set  = new Set(cells);
+  const y    = baseY - DOMA_DROP / 2;
+  for (const key of cells) {
+    const [col, row] = key.split(',').map(Number);
+    // 各セルの4辺を調べ、隣がなければ側面を追加
+    const edges = [
+      { nx: col,   nz: row-1, x: (col+0.5)*CELL,  z: row*CELL,       w: CELL, rotY: 0 },
+      { nx: col,   nz: row+1, x: (col+0.5)*CELL,  z: (row+1)*CELL,   w: CELL, rotY: Math.PI },
+      { nx: col-1, nz: row,   x: col*CELL,         z: (row+0.5)*CELL, w: CELL, rotY: -Math.PI/2 },
+      { nx: col+1, nz: row,   x: (col+1)*CELL,     z: (row+0.5)*CELL, w: CELL, rotY: Math.PI/2 },
+    ];
+    for (const e of edges) {
+      if (!set.has(`${e.nx},${e.nz}`)) {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(e.w, DOMA_DROP), mat);
+        m.rotation.y = e.rotY;
+        m.position.set(e.x, y, e.z);
+        scene.add(m);
+      }
     }
   }
 }
@@ -501,8 +559,6 @@ function generateStair(scene, stair, baseY, floorIdx) {
   }
 
   const stepMat = new THREE.MeshLambertMaterial({ color: 0xc4a882 });
-  const riseMat = new THREE.MeshLambertMaterial({ color: 0xb89a70 });
-  const sideMat = new THREE.MeshLambertMaterial({ color: 0xa08060, side: THREE.DoubleSide });
 
   const STEPS = 8;
   const stepH = FLOOR_H / STEPS;
@@ -516,50 +572,22 @@ function generateStair(scene, stair, baseY, floorIdx) {
       const z0 = dir === 's'
         ? sz + i * stepD
         : sz + sh - (i + 1) * stepD;
-      const riserZ = dir === 's' ? z0 : z0 + stepD;
 
-      // 踏面
+      // 踏面のみ（蹴込み板なし）
       const tread = new THREE.Mesh(new THREE.BoxGeometry(sw, 0.03, stepD), stepMat);
       tread.position.set(sx + sw / 2, y0 + stepH - 0.015, z0 + stepD / 2);
       scene.add(tread);
-
-      // 蹴上
-      const riser = new THREE.Mesh(new THREE.BoxGeometry(sw, stepH, 0.03), riseMat);
-      riser.position.set(sx + sw / 2, y0 + stepH / 2, riserZ);
-      scene.add(riser);
     } else {
       const stepD = sw / STEPS;
       const x0 = dir === 'e'
         ? sx + i * stepD
         : sx + sw - (i + 1) * stepD;
-      const riserX = dir === 'e' ? x0 : x0 + stepD;
 
-      // 踏面
+      // 踏面のみ（蹴込み板なし）
       const tread = new THREE.Mesh(new THREE.BoxGeometry(stepD, 0.03, sh), stepMat);
       tread.position.set(x0 + stepD / 2, y0 + stepH - 0.015, sz + sh / 2);
       scene.add(tread);
-
-      // 蹴上
-      const riser = new THREE.Mesh(new THREE.BoxGeometry(0.03, stepH, sh), riseMat);
-      riser.position.set(riserX, y0 + stepH / 2, sz + sh / 2);
-      scene.add(riser);
     }
-  }
-
-  // 側板
-  if (isNS) {
-    [sx, sx + sw].forEach(xPos => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(sh, FLOOR_H), sideMat);
-      m.rotation.y = Math.PI / 2;
-      m.position.set(xPos, baseY + FLOOR_H / 2, sz + sh / 2);
-      scene.add(m);
-    });
-  } else {
-    [sz, sz + sh].forEach(zPos => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(sw, FLOOR_H), sideMat);
-      m.position.set(sx + sw / 2, baseY + FLOOR_H / 2, zPos);
-      scene.add(m);
-    });
   }
 
   // 階段マーカー（床面）
@@ -570,6 +598,112 @@ function generateStair(scene, stair, baseY, floorIdx) {
   marker.rotation.x = -Math.PI / 2;
   marker.position.set(sx + sw / 2, baseY + 0.005, sz + sh / 2);
   scene.add(marker);
+}
+
+// ─────────────────────────────────────────────────────────
+// 家具ジオメトリ生成
+// ─────────────────────────────────────────────────────────
+function generateFurnitureItems(scene, furniture, baseY) {
+  for (const f of furniture) {
+    const x  = f.x * CELL;
+    const z  = f.y * CELL;
+    const fw = f.w * CELL;
+    const fd = f.h * CELL;
+    switch (f.typeId) {
+      case 'kitchen': genKitchen(scene, x, z, fw, fd, baseY); break;
+      case 'bath':    genBath(scene, x, z, fw, fd, baseY); break;
+      case 'toilet':  genToilet(scene, x, z, fw, fd, baseY); break;
+      case 'chair':   genChair(scene, x, z, fw, fd, baseY); break;
+      case 'table':   genTable(scene, x, z, fw, fd, baseY); break;
+      case 'washer':  genWasher(scene, x, z, fw, fd, baseY); break;
+      case 'sink':    genSink(scene, x, z, fw, fd, baseY); break;
+      case 'fridge':  genFridge(scene, x, z, fw, fd, baseY); break;
+    }
+  }
+}
+
+function addBox(scene, color, px, py, pz, sw, sh, sd) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(sw, sh, sd),
+    new THREE.MeshLambertMaterial({ color })
+  );
+  mesh.position.set(px, py, pz);
+  scene.add(mesh);
+}
+
+function genKitchen(scene, x, z, fw, fd, baseY) {
+  // カウンター本体
+  addBox(scene, 0xd0d0c8, x + fw/2, baseY + 0.45, z + fd/2, fw, 0.9, fd);
+  // 天板
+  addBox(scene, 0x888880, x + fw/2, baseY + 0.91, z + fd/2, fw, 0.03, fd);
+  // シンク（凹み表現: 暗い色の箱）
+  const sinkW = Math.min(0.4, fw * 0.4);
+  addBox(scene, 0x707070, x + fw * 0.35, baseY + 0.93, z + fd/2, sinkW, 0.05, fd * 0.6);
+}
+
+function genBath(scene, x, z, fw, fd, baseY) {
+  // 浴槽外壁
+  addBox(scene, 0xdbeafe, x + fw/2, baseY + 0.3, z + fd/2, fw, 0.6, fd);
+  // 内側（水面）
+  addBox(scene, 0x93c5fd, x + fw/2, baseY + 0.58, z + fd/2, fw*0.8, 0.03, fd*0.75);
+}
+
+function genToilet(scene, x, z, fw, fd, baseY) {
+  const bw = Math.min(fw, 0.35), bd = Math.min(fd * 0.65, 0.45);
+  // 便器本体
+  addBox(scene, 0xf0fdf4, x + fw/2, baseY + 0.22, z + fd*0.55, bw, 0.44, bd);
+  // タンク
+  addBox(scene, 0xe7f7ed, x + fw/2, baseY + 0.5, z + fd*0.12, bw*0.9, 0.35, fd*0.22);
+}
+
+function genChair(scene, x, z, fw, fd, baseY) {
+  const sw = fw * 0.7, sd = fd * 0.7;
+  // 座面
+  addBox(scene, 0xfbbf24, x + fw/2, baseY + 0.44, z + fd/2, sw, 0.06, sd);
+  // 脚 x4
+  const lw = 0.04, lh = 0.44;
+  const ox = sw/2 - 0.06, oz = sd/2 - 0.06;
+  for (const [dx, dz] of [[ox,oz],[-ox,oz],[ox,-oz],[-ox,-oz]])
+    addBox(scene, 0x92400e, x+fw/2+dx, baseY+lh/2, z+fd/2+dz, lw, lh, lw);
+  // 背もたれ
+  addBox(scene, 0xfbbf24, x + fw/2, baseY + 0.75, z + fd/2 - sd/2 + 0.03, sw, 0.6, 0.05);
+}
+
+function genTable(scene, x, z, fw, fd, baseY) {
+  // 天板
+  addBox(scene, 0xc8a04a, x + fw/2, baseY + 0.73, z + fd/2, fw*0.95, 0.06, fd*0.95);
+  // 脚 x4
+  const lw = 0.06, lh = 0.73;
+  const ox = fw*0.4, oz = fd*0.4;
+  for (const [dx, dz] of [[ox,oz],[-ox,oz],[ox,-oz],[-ox,-oz]])
+    addBox(scene, 0xa07830, x+fw/2+dx, baseY+lh/2, z+fd/2+dz, lw, lh, lw);
+}
+
+function genWasher(scene, x, z, fw, fd, baseY) {
+  addBox(scene, 0xe0f2fe, x + fw/2, baseY + 0.45, z + fd/2, fw*0.9, 0.9, fd*0.9);
+  // ドラム窓
+  const geo = new THREE.CylinderGeometry(Math.min(fw, fd)*0.28, Math.min(fw, fd)*0.28, 0.06, 16);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.5 }));
+  mesh.rotation.x = Math.PI / 2;
+  mesh.position.set(x + fw/2, baseY + 0.55, z + fd * 0.05);
+  scene.add(mesh);
+}
+
+function genSink(scene, x, z, fw, fd, baseY) {
+  // 台
+  addBox(scene, 0xf0fdfa, x + fw/2, baseY + 0.4, z + fd/2, fw*0.9, 0.8, fd*0.9);
+  // 天板
+  addBox(scene, 0xccfbf1, x + fw/2, baseY + 0.81, z + fd/2, fw*0.9, 0.03, fd*0.9);
+  // ボウル
+  addBox(scene, 0x99f6e4, x + fw/2, baseY + 0.83, z + fd/2, fw*0.55, 0.05, fd*0.55);
+}
+
+function genFridge(scene, x, z, fw, fd, baseY) {
+  // 本体（天井近くまで）
+  addBox(scene, 0xf1f5f9, x + fw/2, baseY + 0.9, z + fd/2, fw*0.92, 1.8, fd*0.9);
+  // ドアライン（上下区切り）
+  addBox(scene, 0xd1d5db, x + fw/2, baseY + 0.6, z + fd*0.04, fw*0.88, 0.03, 0.02);
+  addBox(scene, 0xd1d5db, x + fw/2, baseY + 1.2, z + fd*0.04, fw*0.88, 0.03, 0.02);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -587,11 +721,15 @@ function generateWalls(scene, floorState, baseY) {
           occupied.add(`${col},${row}`);
     }
   }
-  // 階段セルも通行可能エリアとして扱う（境界に壁を生成しない）
+  // 階段セルは通行可能エリアとして扱う。ただし外周に壁を生成しないため別セットで管理
+  const stairCells = new Set();
   for (const s of (stairs || [])) {
     for (let row = s.y; row < s.y+s.h; row++)
-      for (let col = s.x; col < s.x+s.w; col++)
-        occupied.add(`${col},${row}`);
+      for (let col = s.x; col < s.x+s.w; col++) {
+        const key = `${col},${row}`;
+        occupied.add(key);
+        stairCells.add(key);
+      }
   }
 
   const elMap = new Map();
@@ -633,6 +771,7 @@ function generateWalls(scene, floorState, baseY) {
   }
 
   for (const key of occupied) {
+    if (stairCells.has(key)) continue; // 階段セルの外周には壁を生成しない
     const [c, r] = key.split(',').map(Number);
     addEdge('h', c,   r,   c,   r-1);
     addEdge('h', c,   r+1, c,   r+1);

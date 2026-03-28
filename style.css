@@ -272,36 +272,42 @@ body {
 }
 .room-block.dragging { opacity: .5; }
 
-/* 部屋情報は常にゾーンの上に表示するため、部屋上部に固定ストリップとして配置 */
-.room-inner {
+/* 部屋上部ストリップ（名前・面積） */
+.room-top-strip {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 20;          /* ゾーン(z-index:5/15)より上 */
+  top: 0; left: 0; right: 0;
   display: flex;
-  flex-direction: row;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px;
+  padding: 2px 5px;
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(3px);
-  border-radius: 4px 4px 0 0;
-  border-bottom: 1px solid rgba(0,0,0,.08);
+  pointer-events: all;
+  white-space: nowrap;
   overflow: hidden;
-  pointer-events: none;
-  min-height: 20px;
+  z-index: 23;
+  min-height: 18px;
 }
-.room-icon { font-size: 14px; line-height: 1; flex-shrink: 0; }
+/* 部屋中央アイコン */
+.room-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  pointer-events: none;
+}
+.room-icon { font-size: 20px; line-height: 1; }
 .room-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  color: rgba(0,0,0,.75);
+  color: rgba(0,0,0,.8);
+  pointer-events: auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
-  pointer-events: auto;
+  flex-shrink: 1;
+  min-width: 0;
 }
 .room-area {
   font-size: 10px;
@@ -311,13 +317,16 @@ body {
 }
 
 .label-edit-input {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  text-align: center;
+  color: rgba(0,0,0,.8);
+  background: #fff;
+  text-align: left;
   border: 1px solid var(--color-accent);
-  border-radius: 4px;
-  padding: 2px 4px;
-  width: 90%;
+  border-radius: 3px;
+  padding: 1px 4px;
+  flex: 1;
+  min-width: 40px;
   pointer-events: auto;
 }
 
@@ -690,80 +699,6 @@ body {
 .btn-secondary:hover { background: var(--color-accent-light); }
 
 /* ============================================================
-   ゾーン（サブスペース）
-   ============================================================ */
-.zone-block {
-  position: absolute;
-  border: 2px dashed rgba(0,0,0,.35);
-  border-radius: 4px;
-  cursor: move;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5;
-  overflow: hidden;
-  transition: box-shadow .1s;
-}
-.zone-block:hover {
-  box-shadow: inset 0 0 0 2px rgba(0,0,0,.3);
-  z-index: 15;
-}
-.zone-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: rgba(0,0,0,.6);
-  text-align: center;
-  pointer-events: none;
-  user-select: none;
-}
-.zone-resize-handle {
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  width: 10px;
-  height: 10px;
-  background: rgba(0,0,0,.3);
-  border-radius: 2px;
-  cursor: se-resize;
-}
-
-/* ゾーンリスト（インスペクター内）*/
-.inspector-section-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  padding: 6px 0 4px;
-  border-top: 1px solid var(--color-border);
-  margin-top: 4px;
-}
-#zone-list { display: flex; flex-direction: column; gap: 4px; }
-.zone-list-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background .1s;
-  font-size: 12px;
-}
-.zone-list-item:hover { background: var(--color-accent-light); }
-.zone-list-color {
-  width: 12px; height: 12px;
-  border-radius: 2px;
-  border: 1px solid rgba(0,0,0,.2);
-  flex-shrink: 0;
-}
-.zone-list-label { flex: 1; }
-.zone-del-btn {
-  background: none; border: none; color: var(--color-danger);
-  cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px;
-}
-
-/* ============================================================
    SVG壁・建具レイヤー
    ============================================================ */
 #wall-layer {
@@ -862,10 +797,7 @@ body {
   pointer-events: none;
   z-index: 30;  /* room-block(z2) より上、wall-layer(z50) より下 */
 }
-#grid[data-mode="freeroom"] { cursor: crosshair; }
-#grid[data-mode="freeroom"] .room-block { pointer-events: none; }
-
-/* 不定形セルタイル */
+/* セルタイル */
 .room-cell {
   position: absolute;
   z-index: 2;
@@ -877,27 +809,46 @@ body {
   box-shadow: inset 0 0 0 2.5px #2563eb;
   z-index: 20;
 }
+.room-cell-editing {
+  outline: 2px dashed #16a34a;
+  outline-offset: -2px;
+  cursor: cell;
+  z-index: 21;
+}
 
-/* 不定形ラベルオーバーレイ（背景なし・ポインタ透過） */
+/* 部屋ラベルオーバーレイ（背景なし・ポインタ透過） */
 .room-label-block {
   position: absolute;
   pointer-events: none;
   z-index: 22;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.room-label-block .room-inner {
-  background: rgba(255,255,255,0.75);
-  border-radius: 6px;
-  padding: 2px 6px;
-  text-align: center;
-  backdrop-filter: blur(2px);
-  max-width: 90%;
+.room-label-block .room-top-strip {
   pointer-events: all;
+  cursor: default;
 }
 .room-label-block .room-label {
   cursor: text;
+}
+/* リサイズハンドル（矩形部屋選択時） */
+.room-label-block .resize-handle {
+  pointer-events: none;
+  opacity: 0;
+  z-index: 30;
+}
+.room-label-block.room-label-selected .resize-handle {
+  pointer-events: all;
+  opacity: 1;
+}
+/* 選択中セルのカーソル */
+.room-cell.room-cell-selected:not(.room-cell-editing) {
+  cursor: grab;
+}
+.room-cell.room-cell-selected:not(.room-cell-editing):active {
+  cursor: grabbing;
 }
 
 /* パレット: 不定形モード中のアクティブ表示 */
@@ -906,8 +857,6 @@ body {
   outline-offset: -2px;
   box-shadow: 0 0 0 5px rgba(37,99,235,0.18);
 }
-#grid[data-mode="freeroom"] .palette-item { cursor: pointer; }
-
 /* ============================================================
    フロアボタン
    ============================================================ */
@@ -1094,10 +1043,121 @@ body {
   .room-label { font-size: 10px; }
   .room-icon { font-size: 14px; }
 }
+/* ============================================================
+   家具ブロック
+   ============================================================ */
+.furniture-block {
+  position: absolute;
+  border: 2px solid rgba(0,0,0,.2);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  transition: box-shadow .15s;
+  z-index: 5;
+}
+.furniture-block:hover { box-shadow: 0 0 0 2px var(--color-accent), var(--shadow); z-index: 10; }
+.furniture-block.selected {
+  box-shadow: 0 0 0 2.5px var(--color-accent), 0 2px 12px rgba(37,99,235,.3);
+  z-index: 20;
+  border-color: var(--color-accent);
+}
+.furniture-block.dragging { opacity: .5; }
+.furn-icon  { font-size: 18px; line-height: 1; pointer-events: none; }
+.furn-label { font-size: 10px; font-weight: 600; color: rgba(0,0,0,.7); pointer-events: none; white-space: nowrap; }
+.furn-delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+  display: none;
+  z-index: 30;
+  padding: 0;
+}
+.furniture-block.selected .furn-delete { display: block; }
+.furniture-block.selected .resize-handle,
+.furniture-block:hover .resize-handle { opacity: 1; }
+
+#grid[data-mode="furniture"] { cursor: copy; }
+#grid[data-mode="furniture"] .room-block { pointer-events: none; }
+
 @media (max-width: 600px) {
   #main { flex-direction: column; }
   #palette { width: 100%; height: 80px; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; border-right: none; border-bottom: 1px solid var(--color-border); }
   #palette::before { display: none; }
   #inspector { width: 100%; height: 160px; border-left: none; border-top: 1px solid var(--color-border); }
   :root { --inspector-w: 100%; }
+}
+
+/* ============================================================
+   建具インスペクター
+   ============================================================ */
+.el-insp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.el-insp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+.el-insp-icon { font-size: 14px; flex-shrink: 0; }
+.el-insp-label { flex: 1; font-weight: 500; }
+.el-insp-count {
+  min-width: 24px;
+  text-align: right;
+  font-weight: 700;
+  color: var(--color-accent);
+  font-size: 13px;
+}
+.el-insp-del {
+  padding: 2px 8px !important;
+  font-size: 11px !important;
+  border-radius: 4px !important;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   複数選択
+   ============================================================ */
+.room-block.multi-selected {
+  box-shadow: 0 0 0 3px #f59e0b, 0 2px 8px rgba(245,158,11,.35) !important;
+  z-index: 15 !important;
+  border-color: #f59e0b !important;
+}
+.room-cell.multi-selected {
+  box-shadow: inset 0 0 0 3px #f59e0b !important;
+  z-index: 15 !important;
+}
+.stair-block.multi-selected {
+  box-shadow: 0 0 0 3px #f59e0b, 0 2px 8px rgba(245,158,11,.35) !important;
+  z-index: 30 !important;
+}
+.furniture-block.multi-selected {
+  box-shadow: 0 0 0 3px #f59e0b, 0 2px 8px rgba(245,158,11,.35) !important;
+  z-index: 15 !important;
+  border-color: #f59e0b !important;
+}
+.room-label-block.multi-selected .room-top-strip {
+  background: rgba(254,243,199,0.95);
 }

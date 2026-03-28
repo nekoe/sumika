@@ -1,9 +1,14 @@
 // ツールバーUI（2行コンパクトレイアウト）
 import { ELEMENT_TOOLS } from './walls.js';
+import { FURNITURE_TYPES } from './furniture.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
     `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
+  ).join('');
+
+  const furnitureBtns = FURNITURE_TYPES.map(t =>
+    `<button class="mode-btn furn-type-btn${(state.furnitureType || 'kitchen') === t.id ? ' active' : ''}" data-ftype="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
   ).join('');
 
   const sc = state.stairConfig || { w: 2, h: 3, dir: 'n' };
@@ -32,9 +37,14 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       <div class="tb-sep"></div>
       <div class="tb-group">
         <button class="mode-btn active" data-mode="room" title="部屋配置">🏠 部屋</button>
-        <button class="mode-btn" data-mode="freeroom" title="不定形部屋を自由描画">🖌 不定形</button>
         <button class="mode-btn" data-mode="stair" title="階段を配置">🪜 階段</button>
         <button class="mode-btn" data-mode="element" title="壁・ドア・窓">🔨 建具</button>
+        <button class="mode-btn" data-mode="furniture" title="家具配置">🪑 家具</button>
+      </div>
+      <div class="tb-sep"></div>
+      <div class="tb-group">
+        <button id="btn-rotate-ccw" title="反時計回りに90度回転">↺ 回転</button>
+        <button id="btn-rotate-cw"  title="時計回りに90度回転">↻ 回転</button>
       </div>
       <div class="tb-spacer"></div>
       <div class="tb-group">
@@ -51,7 +61,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
 
     <!-- Row 2: コンテキスト -->
     <div class="tb-context">
-      <!-- 部屋/不定形モード: グリッドサイズ -->
+      <!-- 部屋モード: グリッドサイズ -->
       <div id="ctx-room" class="tb-ctx">
         <span class="tb-ctx-label">グリッド:</span>
         <label title="列数">列<input type="range" id="grid-cols" min="10" max="40" value="${state.gridCols}" step="1" style="width:70px"><b id="cols-val">${state.gridCols}</b></label>
@@ -71,6 +81,11 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <span class="tb-ctx-label">建具:</span>
         ${elementToolBtns}
       </div>
+      <!-- 家具モード: 家具タイプ -->
+      <div id="ctx-furniture" class="tb-ctx" style="display:none">
+        <span class="tb-ctx-label">家具:</span>
+        ${furnitureBtns}
+      </div>
       <!-- 常時表示: 採光 -->
       <div class="tb-ctx tb-sun">
         <span class="tb-ctx-label" title="採光シミュレーション">☀️</span>
@@ -83,6 +98,10 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   // ── undo/redo ─────────────────────────────────────────
   document.getElementById('btn-undo').addEventListener('click', onUndo);
   document.getElementById('btn-redo').addEventListener('click', onRedo);
+
+  // ── 回転 ─────────────────────────────────────────────
+  document.getElementById('btn-rotate-ccw').addEventListener('click', () => onRotate?.(-1));
+  document.getElementById('btn-rotate-cw').addEventListener('click',  () => onRotate?.(1));
 
   // ── フロア切替 ─────────────────────────────────────────
   container.querySelectorAll('.floor-btn').forEach(btn => {
@@ -178,10 +197,20 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); onSave(); }
   });
 
+  // ── 家具タイプ選択 ────────────────────────────────────
+  container.querySelectorAll('.furn-type-btn[data-ftype]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      container.querySelectorAll('.furn-type-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.furnitureType = btn.dataset.ftype;
+    });
+  });
+
   function _showCtx(mode) {
-    document.getElementById('ctx-room').style.display    = (mode === 'room' || mode === 'freeroom') ? 'flex' : 'none';
-    document.getElementById('ctx-stair').style.display   = mode === 'stair'   ? 'flex' : 'none';
-    document.getElementById('ctx-element').style.display = mode === 'element' ? 'flex' : 'none';
+    document.getElementById('ctx-room').style.display      = mode === 'room' ? 'flex' : 'none';
+    document.getElementById('ctx-stair').style.display     = mode === 'stair'     ? 'flex' : 'none';
+    document.getElementById('ctx-element').style.display   = mode === 'element'   ? 'flex' : 'none';
+    document.getElementById('ctx-furniture').style.display = mode === 'furniture' ? 'flex' : 'none';
   }
 
   return {
@@ -208,7 +237,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       container.querySelectorAll('.dir-btn').forEach(b => b.classList.toggle('active', b.dataset.dir === sc.dir));
     },
     setMode(mode) {
-      const isElement = mode !== 'room' && mode !== 'stair' && mode !== 'freeroom';
+      const isElement = mode !== 'room' && mode !== 'stair' && mode !== 'furniture';
       container.querySelectorAll('.mode-btn[data-mode]').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === mode || (b.dataset.mode === 'element' && isElement));
       });
@@ -216,6 +245,9 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       if (isElement) {
         container.querySelectorAll('.el-tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === mode));
       }
+    },
+    syncFurnitureType(ftype) {
+      container.querySelectorAll('.furn-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ftype === ftype));
     },
   };
 }

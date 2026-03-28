@@ -27,8 +27,8 @@ export function initWallLayer(gridEl) {
 // マウス位置からエッジを取得（しきい値20%以内のとき有効）
 export function getEdgeAt(e, gridEl, cs) {
   const rect = gridEl.getBoundingClientRect();
-  const px = e.clientX - rect.left + gridEl.parentElement.scrollLeft;
-  const py = e.clientY - rect.top + gridEl.parentElement.scrollTop;
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
   return pixelToEdge(px, py, cs);
 }
 
@@ -54,8 +54,9 @@ export function renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mo
   svgEl.innerHTML = '';
   svgEl.setAttribute('width', cols * cs);
   svgEl.setAttribute('height', rows * cs);
-  svgEl.style.pointerEvents = (mode === 'room') ? 'none' : 'all';
-  svgEl.style.cursor = (mode === 'room') ? 'default' : 'crosshair';
+  const passThrough = mode === 'room' || mode === 'stair' || mode === 'furniture';
+  svgEl.style.pointerEvents = passThrough ? 'none' : 'all';
+  svgEl.style.cursor = passThrough ? 'default' : 'crosshair';
 
   for (const el of elements) {
     renderElement(svgEl, el, cs);
