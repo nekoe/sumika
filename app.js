@@ -706,13 +706,14 @@ function appendIrregularRoom(gridEl, room) {
   label.dataset.x = room.x; label.dataset.y = room.y;
   label.dataset.w = room.w; label.dataset.h = room.h;
   label.style.cssText = `left:${room.x*cs}px;top:${room.y*cs}px;width:${room.w*cs}px;height:${room.h*cs}px;`;
+  const icon = room.icon ?? type.icon;
   label.innerHTML = `
     <div class="room-top-strip">
       <span class="room-label" title="${room.label}">${room.label}</span>
-      <span class="room-area">${tatami}畳<span class="room-sqm"> (${sqm}㎡)</span></span>
+      <span class="room-area">${tatami}畳</span>
     </div>
     <div class="room-inner">
-      <div class="room-icon">${type.icon}</div>
+      <div class="room-icon">${icon}</div>
     </div>`;
   label.querySelector('.room-top-strip .room-label').addEventListener('dblclick', e => {
     e.stopPropagation(); startLabelEditIrregular(label, room);
@@ -1605,19 +1606,32 @@ function renderRoomInspector(panel, room) {
   });
 }
 
+const ICON_PICKER_EMOJIS = [
+  '🏠','🛋️','🍳','🍽️','🔥','🛏️','🧸','📚','🛁','🚽','🚿','🚪','👟','➡️','📦','🚗','🌿','⬜','✏️',
+  '🪟','🪑','🛒','🧺','🖥️','🎮','🎵','🎨','🧘','🏋️','🌱','🌊','🔑','💡','🔧','🪴','🐾','🍷','☕','🎁',
+];
+
 // ── 部屋インスペクター ────────────────────────────────────
 function renderIrregularRoomInspector(panel, room) {
   const type = getTypeById(room.typeId);
   const { tatami, sqm } = calcAreaCells(room.cells);
   const isEditing = editingRoomId === room.id;
   const isVoid = type.isVoid;
+  const currentIcon = room.icon ?? type.icon;
+  const iconBtns = ICON_PICKER_EMOJIS.map(em =>
+    `<button class="icon-pick-btn${em === currentIcon ? ' active' : ''}" data-emoji="${em}">${em}</button>`
+  ).join('');
   panel.innerHTML = `
     <div class="inspector-header">
-      <span class="inspector-icon">${type.icon}</span>
+      <span class="inspector-icon">${currentIcon}</span>
       <span class="inspector-title">${room.label}${isVoid ? ' <span class="badge-void">吹き抜け</span>' : ''}</span>
     </div>
     <div class="inspector-field"><label>部屋名</label><input type="text" id="inp-label" value="${escHtml(room.label)}"></div>
     <div class="inspector-field"><label>色</label><input type="color" id="inp-color" value="${rgbToHex(room.color)}"></div>
+    <div class="inspector-field" style="flex-direction:column;align-items:flex-start;gap:4px">
+      <label>アイコン</label>
+      <div class="icon-picker">${iconBtns}</div>
+    </div>
     <div class="inspector-info"><strong>${tatami}畳</strong>（${sqm}㎡）<br><span style="font-size:11px;color:#888">${room.cells.length}マス</span></div>
     <button id="btn-edit-cells" class="${isEditing ? 'btn-primary' : 'btn-secondary'} btn-full" style="margin-top:6px">${isEditing ? '✅ 編集完了' : '✏️ セルを編集'}</button>
     <div id="edit-cells-hint" style="font-size:11px;color:#64748b;margin:4px 0 0;display:${isEditing ? 'block' : 'none'}">ドラッグ: マスを追加<br>既存のマスをドラッグ: 削除</div>
@@ -1629,6 +1643,14 @@ function renderIrregularRoomInspector(panel, room) {
     document.querySelectorAll(`.room-cell[data-room-id="${room.id}"]`).forEach(el => el.style.backgroundColor = room.color);
   });
   document.getElementById('inp-color').addEventListener('change', () => { pushUndo(); renderAll(); saveProject(state); });
+  panel.querySelectorAll('.icon-pick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pushUndo();
+      room.icon = btn.dataset.emoji;
+      renderAll();
+      saveProject(state);
+    });
+  });
   document.getElementById('btn-edit-cells').addEventListener('click', () => {
     if (editingRoomId === room.id) {
       editingRoomId = null;

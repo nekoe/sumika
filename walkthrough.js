@@ -14,6 +14,7 @@ const MOUSE_SENS = 0.002;
 const COL_R      = 0.28;
 const DOOR_DIST  = 0.5;
 const STAIR_SPEED = 2.5;  // 階段移動速度 (m/s)
+const STAIR_STEPS = 8;    // 1フロア分の段数
 
 // ─────────────────────────────────────────────────────────
 // エントリポイント
@@ -560,15 +561,14 @@ function generateStair(scene, stair, baseY, floorIdx) {
 
   const stepMat = new THREE.MeshLambertMaterial({ color: 0xc4a882 });
 
-  const STEPS = 8;
-  const stepH = FLOOR_H / STEPS;
+  const stepH = FLOOR_H / STAIR_STEPS;
   const isNS  = (dir === 'n' || dir === 's');
 
-  for (let i = 0; i < STEPS; i++) {
+  for (let i = 0; i < STAIR_STEPS; i++) {
     const y0 = baseY + i * stepH;
 
     if (isNS) {
-      const stepD = sh / STEPS;
+      const stepD = sh / STAIR_STEPS;
       const z0 = dir === 's'
         ? sz + i * stepD
         : sz + sh - (i + 1) * stepD;
@@ -578,7 +578,7 @@ function generateStair(scene, stair, baseY, floorIdx) {
       tread.position.set(sx + sw / 2, y0 + stepH - 0.015, z0 + stepD / 2);
       scene.add(tread);
     } else {
-      const stepD = sw / STEPS;
+      const stepD = sw / STAIR_STEPS;
       const x0 = dir === 'e'
         ? sx + i * stepD
         : sx + sw - (i + 1) * stepD;
@@ -598,6 +598,93 @@ function generateStair(scene, stair, baseY, floorIdx) {
   marker.rotation.x = -Math.PI / 2;
   marker.position.set(sx + sw / 2, baseY + 0.005, sz + sh / 2);
   scene.add(marker);
+
+  // 手すり
+  addStairHandrails(scene, stair, baseY);
+}
+
+// 階段手すり
+function addStairHandrails(scene, stair, baseY) {
+  if (stair.mirror) return;
+
+  const HANDRAIL_H = 0.9;   // 手すりの高さ
+  const POST_W     = 0.05;  // 支柱の太さ
+  const RAIL_W     = 0.04;  // 手すり棒の太さ
+  const BALUSTER_INTERVAL = 2; // 間柱の間隔（ステップ数）
+
+  const mat  = new THREE.MeshLambertMaterial({ color: 0x8b6343 });
+  const sx   = stair.x * CELL, sz = stair.y * CELL;
+  const sw   = stair.w * CELL, sh = stair.h * CELL;
+  const dir  = stair.dir || 's';
+  const isNS = dir === 'n' || dir === 's';
+  const stepH = FLOOR_H / STAIR_STEPS;
+
+  function makeBox(w, h, d) {
+    return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  }
+
+  if (isNS) {
+    const stepD  = sh / STAIR_STEPS;
+    const zStart = dir === 's' ? sz       : sz + sh;
+    const zEnd   = dir === 's' ? sz + sh  : sz;
+    const railLen = Math.sqrt(sh * sh + FLOOR_H * FLOOR_H);
+    const angle   = Math.atan2(FLOOR_H, sh);
+
+    for (const rx of [sx + POST_W / 2, sx + sw - POST_W / 2]) {
+      // 両端の縦支柱
+      const bottom = makeBox(POST_W, HANDRAIL_H, POST_W);
+      bottom.position.set(rx, baseY + HANDRAIL_H / 2, zStart);
+      scene.add(bottom);
+
+      const top = makeBox(POST_W, HANDRAIL_H, POST_W);
+      top.position.set(rx, baseY + FLOOR_H + HANDRAIL_H / 2, zEnd);
+      scene.add(top);
+
+      // 間柱（中間バルスター）
+      for (let i = BALUSTER_INTERVAL; i < STAIR_STEPS; i += BALUSTER_INTERVAL) {
+        const zi = dir === 's' ? sz + i * stepD : sz + sh - i * stepD;
+        const yi = baseY + i * stepH;
+        const bal = makeBox(POST_W, HANDRAIL_H, POST_W);
+        bal.position.set(rx, yi + HANDRAIL_H / 2, zi);
+        scene.add(bal);
+      }
+
+      // 斜め手すり棒
+      const rail = makeBox(RAIL_W, RAIL_W, railLen);
+      rail.position.set(rx, baseY + FLOOR_H / 2 + HANDRAIL_H, (zStart + zEnd) / 2);
+      rail.rotation.x = dir === 's' ? -angle : angle;
+      scene.add(rail);
+    }
+  } else {
+    const stepD  = sw / STAIR_STEPS;
+    const xStart = dir === 'e' ? sx       : sx + sw;
+    const xEnd   = dir === 'e' ? sx + sw  : sx;
+    const railLen = Math.sqrt(sw * sw + FLOOR_H * FLOOR_H);
+    const angle   = Math.atan2(FLOOR_H, sw);
+
+    for (const rz of [sz + POST_W / 2, sz + sh - POST_W / 2]) {
+      const bottom = makeBox(POST_W, HANDRAIL_H, POST_W);
+      bottom.position.set(xStart, baseY + HANDRAIL_H / 2, rz);
+      scene.add(bottom);
+
+      const top = makeBox(POST_W, HANDRAIL_H, POST_W);
+      top.position.set(xEnd, baseY + FLOOR_H + HANDRAIL_H / 2, rz);
+      scene.add(top);
+
+      for (let i = BALUSTER_INTERVAL; i < STAIR_STEPS; i += BALUSTER_INTERVAL) {
+        const xi = dir === 'e' ? sx + i * stepD : sx + sw - i * stepD;
+        const yi = baseY + i * stepH;
+        const bal = makeBox(POST_W, HANDRAIL_H, POST_W);
+        bal.position.set(xi, yi + HANDRAIL_H / 2, rz);
+        scene.add(bal);
+      }
+
+      const rail = makeBox(railLen, RAIL_W, RAIL_W);
+      rail.position.set((xStart + xEnd) / 2, baseY + FLOOR_H / 2 + HANDRAIL_H, rz);
+      rail.rotation.z = dir === 'e' ? angle : -angle;
+      scene.add(rail);
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────

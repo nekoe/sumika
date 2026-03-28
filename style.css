@@ -1103,6 +1103,43 @@ body {
 }
 
 /* ============================================================
+   アイコンピッカー
+   ============================================================ */
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 4px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.icon-pick-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background .1s, border-color .1s;
+}
+.icon-pick-btn:hover {
+  background: #e2e8f0;
+}
+.icon-pick-btn.active {
+  background: #dbeafe;
+  border-color: var(--color-accent);
+}
+
+/* ============================================================
    建具インスペクター
    ============================================================ */
 .el-insp-list {
