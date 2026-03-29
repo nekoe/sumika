@@ -23,7 +23,7 @@
 ```bash
 # リポジトリをクローン
 git clone <repository-url>
-cd myhome
+cd SUMIKA
 
 # npx でサーバーを起動（インストール不要）
 npx serve .
@@ -34,7 +34,7 @@ npx serve .
 ### Python を使う場合
 
 ```bash
-cd myhome
+cd SUMIKA
 python3 -m http.server 8080
 ```
 
