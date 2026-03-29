@@ -52,6 +52,7 @@ let selectedFurnitureId = null;
 let multiSelected = new Set();
 // 複数選択中の ID 集合（room/stair/furniture）
 let multiMoveDragging = false;
+let multiIncludesElements = false; // 全選択時に建具も移動対象に含める
 
 // セル編集
 let paintCells    = null;
@@ -1244,6 +1245,7 @@ function selectAll() {
   for (const r of state.rooms) multiSelected.add(r.id);
   for (const s of state.stairs) multiSelected.add(s.id);
   for (const f of (state.furniture || [])) multiSelected.add(f.id);
+  multiIncludesElements = true;
   selectedId = null; selectedStairId = null; selectedFurnitureId = null;
   renderAll();
   showToast(`${multiSelected.size}個を選択 — ドラッグで一括移動、Escでキャンセル`);
@@ -1260,6 +1262,7 @@ function toggleMultiSelect(id) {
 function clearMultiSelected() {
   if (multiSelected.size === 0) return;
   multiSelected = new Set();
+  multiIncludesElements = false;
   renderAll();
   updateInspector();
 }
@@ -1304,6 +1307,9 @@ function applyMultiMovePreview(dx, dy) {
     document.querySelectorAll(`.stair-block[data-id="${id}"]`).forEach(el => { el.style.transform = tx; el.style.zIndex = '100'; });
     document.querySelectorAll(`.furniture-block[data-id="${id}"]`).forEach(el => { el.style.transform = tx; el.style.zIndex = '100'; });
   }
+  if (multiIncludesElements && svgEl) {
+    svgEl.style.transform = `translate(${dx*cs}px,${dy*cs}px)`;
+  }
 }
 
 function clearMultiMovePreview() {
@@ -1313,6 +1319,7 @@ function clearMultiMovePreview() {
       el.style.zIndex = '';
     });
   }
+  if (svgEl) svgEl.style.transform = '';
 }
 
 function commitMultiMove(dx, dy) {
@@ -1341,6 +1348,12 @@ function commitMultiMove(dx, dy) {
     }
     const furn = (state.furniture || []).find(f => f.id === id);
     if (furn) { furn.x += dx; furn.y += dy; }
+  }
+  if (multiIncludesElements) {
+    for (const el of (state.elements || [])) {
+      el.col += dx;
+      el.row += dy;
+    }
   }
   renderAll();
   saveProject(state);
@@ -1489,7 +1502,7 @@ function renderElementInspector(panel) {
 // ── 間取り概要（選択なし時）────────────────────────────────
 function renderAreaSummary(panel) {
   const rows = state.floors.map((fl, fi) => {
-    const rooms = (fl.rooms || []).filter(r => !getTypeById(r.typeId).isVoid);
+    const rooms = (fl.rooms || []).filter(r => !getTypeById(r.typeId).isVoid && r.typeId !== 'garage');
     const cellCount = rooms.reduce((s, r) => s + r.cells.length, 0);
     const tsubo = (cellCount / 4).toFixed(2);
     const sqm   = (cellCount * CELL_M * CELL_M).toFixed(1);
