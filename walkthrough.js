@@ -799,10 +799,10 @@ function genSink(scene, x, z, fw, fd, baseY) {
 
 function genFridge(scene, x, z, fw, fd, baseY) {
   // 本体（天井近くまで）
-  addBox(scene, 0xf1f5f9, x + fw/2, baseY + 0.9, z + fd/2, fw*0.92, 1.8, fd*0.9);
+  addBox(scene, 0xfafafa, x + fw/2, baseY + 0.9, z + fd/2, fw*0.92, 1.8, fd*0.9);
   // ドアライン（上下区切り）
-  addBox(scene, 0xd1d5db, x + fw/2, baseY + 0.6, z + fd*0.04, fw*0.88, 0.03, 0.02);
-  addBox(scene, 0xd1d5db, x + fw/2, baseY + 1.2, z + fd*0.04, fw*0.88, 0.03, 0.02);
+  addBox(scene, 0xe5e7eb, x + fw/2, baseY + 0.6, z + fd*0.04, fw*0.88, 0.03, 0.02);
+  addBox(scene, 0xe5e7eb, x + fw/2, baseY + 1.2, z + fd*0.04, fw*0.88, 0.03, 0.02);
 }
 
 // ─────────────────────────────────────────────────────────

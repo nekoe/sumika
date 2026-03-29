@@ -7,6 +7,7 @@ import { initToolbar } from './toolbar.js';
 import { initWallLayer, renderWallLayer, getEdgeAt, edgeKey, ELEMENT_TOOLS } from './walls.js';
 import { startWalkthrough } from './walkthrough.js';
 import { getFurnitureTypeById } from './furniture.js';
+import { initLandLayer, renderLand, getLandPos, distPx, calcLandArea, getHitVertex } from './land.js';
 
 const AUTOSAVE_INTERVAL = 5000; // ms
 
@@ -28,6 +29,7 @@ let state = {
   compass: 0,
   sunHour: 12,
   stairConfig: { w: 2, h: 3, dir: 'n' },
+  land: { points: [], closed: false },
 };
 Object.defineProperty(state, 'rooms',     { get() { return this.floors[this.currentFloor].rooms;     }, set(v) { this.floors[this.currentFloor].rooms     = v; }, enumerable: false });
 Object.defineProperty(state, 'elements',  { get() { return this.floors[this.currentFloor].elements;  }, set(v) { this.floors[this.currentFloor].elements  = v; }, enumerable: false });
@@ -39,6 +41,10 @@ let undoStack = [];
 let redoStack = [];
 let toolbar = null;
 let svgEl = null;
+let landSvg = null;
+let landPreview = null;
+let landDragIdx = -1;   // ドラッグ中の頂点インデックス（-1=なし）
+let landDragged = false; // ドラッグが発生したか（click誤発火防止）
 let hoveredEdge = null;
 let selectedId = null;
 let selectedStairId = null;
@@ -78,6 +84,7 @@ function applyProjectData(data) {
     state.floors[0].rooms    = data.rooms    ?? [];
     state.floors[0].elements = data.elements ?? [];
   }
+  state.land = data.land ?? { points: [], closed: false };
   state.floors.forEach(f => f.rooms.forEach(r => normalizeCells(r)));
   syncStairsBetweenFloors();
 }
@@ -91,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderPalette(document.getElementById('palette'));
   svgEl = initWallLayer(document.getElementById('grid'));
+  landSvg = initLandLayer(document.getElementById('grid'));
 
   paintCanvas = document.createElement('canvas');
   paintCanvas.id = 'paint-canvas';
@@ -120,6 +128,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }, msg => alert(msg)),
     onRotate:        (dir) => rotateFloorPlan(dir > 0),
     onWalkthrough:   () => startWalkthrough(state),
+    onLandClear: () => {
+      pushUndo();
+      state.land = { points: [], closed: false };
+      landPreview = null;
+      renderLandLayer();
+      saveProject(state);
+    },
     onCompassChange: () => { renderCompassIndicator(); saveProject(state); },
     onReset: () => {
       pushUndo();
@@ -186,6 +201,14 @@ document.addEventListener('DOMContentLoaded', () => {
       selectedFurnitureId = null;
       renderFurniture();
       saveProject(state);
+    }
+    if (e.key === 'Escape' && state.mode === 'land' && !state.land?.closed) {
+      // 描画中（未完成）のみキャンセル。閉じたポリゴンはそのまま保持
+      state.land = { points: [], closed: false };
+      landPreview = null;
+      renderLandLayer();
+      saveProject(state);
+      return;
     }
     if (e.key === 'Escape') {
       if (multiSelected.size > 0) { clearMultiSelected(); return; }
@@ -322,7 +345,84 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // 土地描画モード
+  const gridElForLand = document.getElementById('grid');
+
+  // 頂点ドラッグ開始
+  gridElForLand.addEventListener('mousedown', e => {
+    if (state.mode !== 'land') return;
+    const idx = getHitVertex(e, gridElForLand, state.cellSize, state.land);
+    if (idx === -1) return;
+    e.preventDefault();
+    pushUndo();
+    landDragIdx = idx;
+    landDragged = false;
+  });
+
+  // ドラッグ終了
+  document.addEventListener('mouseup', () => {
+    if (landDragIdx < 0) return;
+    landDragIdx = -1;
+    if (landDragged) saveProject(state);
+    landDragged = false;
+  });
+
+  gridElForLand.addEventListener('mousemove', e => {
+    if (state.mode !== 'land') return;
+
+    // 頂点ドラッグ中
+    if (landDragIdx >= 0) {
+      const pos = getLandPos(e, gridElForLand, state.cellSize);
+      const pts = [...(state.land?.points ?? [])];
+      pts[landDragIdx] = pos;
+      state.land = { ...state.land, points: pts };
+      landDragged = true;
+      renderLandLayer();
+      return;
+    }
+
+    // カーソル変更（頂点ホバー時はgrab）
+    const hitIdx = getHitVertex(e, gridElForLand, state.cellSize, state.land);
+    gridElForLand.style.cursor = hitIdx >= 0 ? 'grab' : '';
+
+    // 描画中プレビュー
+    if (!state.land?.closed && (state.land?.points?.length ?? 0) > 0) {
+      landPreview = getLandPos(e, gridElForLand, state.cellSize);
+    } else {
+      landPreview = null;
+    }
+    renderLandLayer();
+  });
+
+  gridElForLand.addEventListener('mouseleave', e => {
+    if (state.mode !== 'land') return;
+    gridElForLand.style.cursor = '';
+    landPreview = null;
+    renderLandLayer();
+  });
+
+  gridElForLand.addEventListener('click', e => {
+    if (state.mode !== 'land') return;
+    if (landDragged) { landDragged = false; return; } // ドラッグ後のclick誤発火を無視
+    if (state.land?.closed) return;
+    const pos = getLandPos(e, gridElForLand, state.cellSize);
+    const land = state.land ?? { points: [], closed: false };
+    if (land.points.length >= 3 && distPx(pos, land.points[0], state.cellSize) < 12) {
+      pushUndo();
+      state.land = { ...land, closed: true };
+      landPreview = null;
+      renderLandLayer();
+      saveProject(state);
+      return;
+    }
+    pushUndo();
+    state.land = { ...land, points: [...land.points, pos] };
+    renderLandLayer();
+    saveProject(state);
+  });
+
   renderAll();
+  renderLandLayer();
   renderCompassIndicator();
   toolbar.syncSliders(state);
   toolbar.updateUndoRedo(false, false);
@@ -584,7 +684,7 @@ function handleFloorChange(floorIdx) {
 // ============================================================
 function handleModeChange(mode) {
   state.mode = mode;
-  if (mode !== 'room' && mode !== 'stair' && mode !== 'furniture') state.elementTool = mode;
+  if (mode !== 'room' && mode !== 'stair' && mode !== 'furniture' && mode !== 'land') state.elementTool = mode;
   paintCells = null;
   paintMode  = null;
   editingRoomId = null;
@@ -601,6 +701,10 @@ function handleModeChange(mode) {
   if (mode !== 'stair') {
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
   }
+  landPreview = null;
+  landDragIdx = -1;
+  document.getElementById('grid').style.cursor = '';
+  renderLandLayer();
   updateInspector();
 }
 
@@ -613,8 +717,19 @@ function renderAll() {
   renderStairs();
   renderFurniture();
   renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
+  renderLandLayer();
   updateInspector();
   toolbar?.updateUndoRedo(undoStack.length > 0, redoStack.length > 0);
+}
+
+function renderLandLayer() {
+  if (!landSvg) return;
+  renderLand(landSvg, state.land, state.cellSize, state.gridCols, state.gridRows, landPreview);
+  if (state.land?.closed && state.land.points.length >= 3) {
+    toolbar?.updateLandArea(calcLandArea(state.land.points));
+  } else {
+    toolbar?.updateLandArea(0);
+  }
 }
 
 function applyGridCss() {
@@ -627,6 +742,10 @@ function applyGridCss() {
   if (svgEl) {
     svgEl.setAttribute('width',  state.gridCols * cs);
     svgEl.setAttribute('height', state.gridRows * cs);
+  }
+  if (landSvg) {
+    landSvg.setAttribute('width',  state.gridCols * cs);
+    landSvg.setAttribute('height', state.gridRows * cs);
   }
   if (paintCanvas) {
     paintCanvas.width  = state.gridCols * cs;

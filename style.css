@@ -1220,3 +1220,44 @@ body {
 .room-label-block.multi-selected .room-top-strip {
   background: rgba(254,243,199,0.95);
 }
+
+/* ─────────────────────────────────────────────────────────
+   土地レイヤー
+───────────────────────────────────────────────────────── */
+#land-layer {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+#grid[data-mode="land"] { cursor: crosshair; }
+#grid[data-mode="land"] .room-block { pointer-events: none; }
+#grid[data-mode="land"] .stair-block { pointer-events: none; }
+#grid[data-mode="land"] .furniture-block { pointer-events: none; }
+
+.land-fill {
+  fill: rgba(34, 197, 94, 0.12);
+  stroke: none;
+}
+.land-seg {
+  stroke: #16a34a;
+  stroke-width: 2;
+}
+.land-point {
+  fill: #16a34a;
+  stroke: #fff;
+  stroke-width: 2;
+  cursor: default;
+}
+.land-first {
+  fill: #dc2626;
+}
+.land-label-bg {
+  fill: rgba(255, 255, 255, 0.9);
+}
+.land-label {
+  font-size: 11px;
+  fill: #166534;
+  font-weight: 600;
+  font-family: monospace;
+}

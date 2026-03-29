@@ -14,6 +14,7 @@ export function saveProject(state) {
       compass:      state.compass     ?? 0,
       sunHour:      state.sunHour     ?? 12,
       stairConfig:  state.stairConfig ?? { w: 2, h: 3, dir: 'n' },
+      land:         state.land ?? { points: [], closed: false },
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
@@ -69,6 +70,7 @@ export function exportJSON(state) {
     compass:      state.compass     ?? 0,
     sunHour:      state.sunHour     ?? 12,
     stairConfig:  state.stairConfig ?? { w: 2, h: 3, dir: 'n' },
+    land:         state.land ?? { points: [], closed: false },
     exportedAt:   new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

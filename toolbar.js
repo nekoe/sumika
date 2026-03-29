@@ -2,7 +2,7 @@
 import { ELEMENT_TOOLS } from './walls.js';
 import { FURNITURE_TYPES } from './furniture.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
     `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
   ).join('');
@@ -40,6 +40,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <button class="mode-btn" data-mode="stair" title="階段を配置">🪜 階段</button>
         <button class="mode-btn" data-mode="element" title="壁・ドア・窓">🔨 建具</button>
         <button class="mode-btn" data-mode="furniture" title="家具配置">🪑 家具</button>
+        <button class="mode-btn" data-mode="land" title="土地形状を描く">🏡 土地</button>
       </div>
       <div class="tb-sep"></div>
       <div class="tb-group">
@@ -85,6 +86,13 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       <div id="ctx-furniture" class="tb-ctx" style="display:none">
         <span class="tb-ctx-label">家具:</span>
         ${furnitureBtns}
+      </div>
+      <!-- 土地モード -->
+      <div id="ctx-land" class="tb-ctx" style="display:none">
+        <span class="tb-ctx-label">土地:</span>
+        <span id="land-area-label" class="tb-ctx-label">未完成</span>
+        <button id="btn-land-clear" title="土地をクリア">🗑 クリア</button>
+        <span class="tb-ctx-label" style="color:#888;font-size:11px">クリックで頂点追加 / 始点クリックで閉じる / Escでキャンセル</span>
       </div>
       <!-- 常時表示: 採光 -->
       <div class="tb-ctx tb-sun">
@@ -177,6 +185,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     if (confirm('間取りをリセットしますか？この操作は元に戻せません。')) onReset();
   });
   document.getElementById('btn-walkthrough').addEventListener('click', () => onWalkthrough?.());
+  document.getElementById('btn-land-clear').addEventListener('click', () => onLandClear?.());
 
   // ── 採光 ──────────────────────────────────────────────
   document.getElementById('inp-compass').addEventListener('input', e => {
@@ -211,6 +220,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     document.getElementById('ctx-stair').style.display     = mode === 'stair'     ? 'flex' : 'none';
     document.getElementById('ctx-element').style.display   = mode === 'element'   ? 'flex' : 'none';
     document.getElementById('ctx-furniture').style.display = mode === 'furniture' ? 'flex' : 'none';
+    document.getElementById('ctx-land').style.display      = mode === 'land'      ? 'flex' : 'none';
   }
 
   return {
@@ -237,7 +247,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       container.querySelectorAll('.dir-btn').forEach(b => b.classList.toggle('active', b.dataset.dir === sc.dir));
     },
     setMode(mode) {
-      const isElement = mode !== 'room' && mode !== 'stair' && mode !== 'furniture';
+      const isElement = mode !== 'room' && mode !== 'stair' && mode !== 'furniture' && mode !== 'land';
       container.querySelectorAll('.mode-btn[data-mode]').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === mode || (b.dataset.mode === 'element' && isElement));
       });
@@ -248,6 +258,11 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     },
     syncFurnitureType(ftype) {
       container.querySelectorAll('.furn-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ftype === ftype));
+    },
+    updateLandArea(areaM2) {
+      const el = document.getElementById('land-area-label');
+      if (!el) return;
+      el.textContent = areaM2 > 0 ? `${areaM2.toFixed(1)}㎡ (${(areaM2 / 3.305785).toFixed(1)}坪)` : '未完成';
     },
   };
 }
