@@ -2,7 +2,7 @@
 import { ELEMENT_TOOLS } from './walls.js';
 import { FURNITURE_TYPES } from './furniture.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear, onPrint, onExportSVG, onExportPNG }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
     `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
   ).join('');
@@ -50,6 +50,9 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       <div class="tb-spacer"></div>
       <div class="tb-group">
         <button id="btn-save" class="btn-primary" title="保存 (Ctrl+S)">💾 保存</button>
+        <button id="btn-print" title="PDF出力">🖨️ PDF</button>
+        <button id="btn-export-svg" title="SVGで保存">📐 SVG</button>
+        <button id="btn-export-png" title="PNGで保存">🖼️ PNG</button>
         <button id="btn-export" title="JSONエクスポート">📤</button>
         <label class="btn" title="JSONインポート">📥<input type="file" id="btn-import" accept=".json" style="display:none"></label>
         <button id="btn-reset" class="btn-danger" title="リセット">🗑️</button>
@@ -177,6 +180,9 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
 
   // ── ファイル操作 ──────────────────────────────────────
   document.getElementById('btn-save').addEventListener('click', onSave);
+  document.getElementById('btn-print').addEventListener('click', () => onPrint?.());
+  document.getElementById('btn-export-svg').addEventListener('click', () => onExportSVG?.());
+  document.getElementById('btn-export-png').addEventListener('click', () => onExportPNG?.());
   document.getElementById('btn-export').addEventListener('click', onExport);
   document.getElementById('btn-import').addEventListener('change', e => {
     if (e.target.files[0]) { onImport(e.target.files[0]); e.target.value = ''; }

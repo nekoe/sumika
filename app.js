@@ -129,6 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }, msg => alert(msg)),
     onRotate:        (dir) => rotateFloorPlan(dir > 0),
     onWalkthrough:   () => startWalkthrough(state),
+    onPrint:         () => handlePrint(),
+    onExportSVG:     () => exportSVG(),
+    onExportPNG:     () => exportPNG(),
     onLandClear: () => {
       pushUndo();
       state.land = { points: [], closed: false };
@@ -1500,6 +1503,219 @@ function renderElementInspector(panel) {
 }
 
 // ── 間取り概要（選択なし時）────────────────────────────────
+// ============================================================
+// PDF出力
+// ============================================================
+function handlePrint() {
+  const gridEl = document.getElementById('grid');
+  const gridW  = state.gridCols * state.cellSize;
+  const gridH  = state.gridRows * state.cellSize;
+
+  // A4縦 印刷可能域（余白込み）: 約680 × 960px
+  const printW = 680, printH = 960;
+  const scale  = Math.min(printW / gridW, printH / gridH, 1);
+
+  // ヘッダー内容を設定
+  const headerEl = document.getElementById('print-header');
+  const floorLabel = `${state.currentFloor + 1}F`;
+  const rooms = state.rooms.filter(r => !getTypeById(r.typeId).isVoid && r.typeId !== 'garage');
+  const cellCount = rooms.reduce((s, r) => s + (r.cells?.length ?? 0), 0);
+  const sqm   = (cellCount * CELL_M * CELL_M).toFixed(1);
+  const tsubo = (cellCount / 4).toFixed(2);
+  const dateStr = new Date().toLocaleDateString('ja-JP');
+  headerEl.innerHTML =
+    `<b>間取り図</b>&ensp;${floorLabel}&ensp;` +
+    `延床面積: <b>${sqm}㎡</b>（${tsubo}坪）&ensp;` +
+    `<span class="print-date">${dateStr}</span>`;
+
+  // グリッドをスケール（印刷後に復元）
+  gridEl.style.transformOrigin = 'top left';
+  gridEl.style.transform  = `scale(${scale})`;
+  gridEl.style.marginRight  = `${gridW  * (scale - 1)}px`;
+  gridEl.style.marginBottom = `${gridH * (scale - 1)}px`;
+
+  document.body.classList.add('printing');
+
+  const restore = () => {
+    gridEl.style.transform    = '';
+    gridEl.style.marginRight  = '';
+    gridEl.style.marginBottom = '';
+    headerEl.innerHTML = '';
+    document.body.classList.remove('printing');
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  window.print();
+}
+
+// ============================================================
+// SVG/PNGエクスポート共通
+// ============================================================
+function buildSVGString() {
+  const cs = state.cellSize;
+  const W  = state.gridCols * cs;
+  const H  = state.gridRows * cs;
+
+  const DIRS_LABEL = { n: '↑', s: '↓', e: '→', w: '←' };
+
+  // 埋め込みCSS（壁・ドア・窓・土地の描画スタイル）
+  const css = `
+    .el-wall { stroke: #1e293b; stroke-width: 5; stroke-linecap: round; }
+    .el-lowwall line { stroke: #64748b; stroke-width: 2; stroke-linecap: round; }
+    .el-door-gap { stroke: #fff; stroke-width: 6; }
+    .el-door-panel { stroke: #7c3aed; stroke-width: 2; }
+    .el-door-arc { stroke: #7c3aed; stroke-width: 1.5; fill: none; }
+    .el-window line:nth-child(1), .el-window line:nth-child(3) { stroke: #0ea5e9; stroke-width: 2; }
+    .el-window line:nth-child(2) { stroke: #0ea5e9; stroke-width: 4; }
+    .el-window-tall line:nth-child(1), .el-window-tall line:nth-child(3) { stroke: #0284c7; stroke-width: 2; }
+    .el-window-tall line:nth-child(2) { stroke: #0284c7; stroke-width: 6; }
+    .el-window-low line:nth-child(1), .el-window-low line:nth-child(3) { stroke: #38bdf8; stroke-width: 1.5; stroke-dasharray: 4 2; }
+    .el-window-low line:nth-child(2) { stroke: #38bdf8; stroke-width: 3; }
+    .land-fill { fill: rgba(34,197,94,0.12); stroke: none; }
+    .land-seg { stroke: #16a34a; stroke-width: 2; }
+    .land-point { fill: #16a34a; stroke: #fff; stroke-width: 1.5; }
+    .land-first { fill: #dc2626; }
+    .land-label-bg { fill: rgba(255,255,255,0.9); }
+    .land-label { font-size: 11px; fill: #166534; font-family: sans-serif; }
+  `;
+
+  let inner = '';
+
+  // 白背景
+  inner += `<rect width="${W}" height="${H}" fill="#fff"/>`;
+
+  // グリッド線
+  inner += `<g stroke="#e2e8f0" stroke-width="0.5">`;
+  for (let c = 0; c <= state.gridCols; c++) {
+    inner += `<line x1="${c*cs}" y1="0" x2="${c*cs}" y2="${H}"/>`;
+  }
+  for (let r = 0; r <= state.gridRows; r++) {
+    inner += `<line x1="0" y1="${r*cs}" x2="${W}" y2="${r*cs}"/>`;
+  }
+  inner += `</g>`;
+
+  // 土地ポリゴン (fill)
+  const land = state.land;
+  if (land?.closed && land.points.length >= 3) {
+    const ptStr = land.points.map(p => `${p.x * cs},${p.y * cs}`).join(' ');
+    inner += `<polygon points="${ptStr}" class="land-fill"/>`;
+  }
+
+  // 部屋セル・ラベル・階段
+  const allFloorData = state.floors;
+  for (let fi = 0; fi < allFloorData.length; fi++) {
+    const fl = allFloorData[fi];
+    const opacity = fi === state.currentFloor ? 1 : 0.35;
+    for (const room of (fl.rooms || [])) {
+      const type = getTypeById(room.typeId);
+      const color = room.color || type.color;
+      for (const key of (room.cells || [])) {
+        const [col, row] = key.split(',').map(Number);
+        inner += `<rect x="${col*cs}" y="${row*cs}" width="${cs}" height="${cs}" fill="${color}" opacity="${opacity}"/>`;
+      }
+      if (fi === state.currentFloor) {
+        const cx = (room.x + room.w / 2) * cs;
+        const cy = (room.y + room.h / 2) * cs;
+        const icon = room.icon ?? type.icon;
+        inner += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" font-size="13" font-family="sans-serif" fill="#374151">${escSVG(room.label)}</text>`;
+        inner += `<text x="${cx}" y="${cy + 11}" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#6b7280">${escSVG(icon)}</text>`;
+      }
+    }
+    for (const s of (fl.stairs || [])) {
+      const opacity2 = fi === state.currentFloor ? 1 : 0.3;
+      inner += `<rect x="${s.x*cs}" y="${s.y*cs}" width="${s.w*cs}" height="${s.h*cs}" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1" opacity="${opacity2}" rx="2"/>`;
+      if (fi === state.currentFloor) {
+        const scx = (s.x + s.w / 2) * cs;
+        const scy = (s.y + s.h / 2) * cs;
+        const arrow = DIRS_LABEL[s.dir || 'n'];
+        inner += `<text x="${scx}" y="${scy + 5}" text-anchor="middle" font-size="14" font-family="sans-serif" fill="#475569">🪜${escSVG(arrow)}</text>`;
+      }
+    }
+  }
+
+  // 家具（カレントフロア）
+  for (const furn of (state.furniture || [])) {
+    const ftype = getFurnitureTypeById(furn.typeId);
+    inner += `<rect x="${furn.x*cs}" y="${furn.y*cs}" width="${furn.w*cs}" height="${furn.h*cs}" fill="${ftype.color}" stroke="#cbd5e1" stroke-width="0.5" rx="2"/>`;
+    const fcx = (furn.x + furn.w / 2) * cs;
+    const fcy = (furn.y + furn.h / 2) * cs;
+    inner += `<text x="${fcx}" y="${fcy - 4}" text-anchor="middle" font-size="14" font-family="sans-serif">${escSVG(ftype.icon)}</text>`;
+    inner += `<text x="${fcx}" y="${fcy + 11}" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#475569">${escSVG(ftype.label)}</text>`;
+  }
+
+  // 壁・ドア・窓レイヤー
+  if (svgEl) {
+    const wallClone = svgEl.cloneNode(true);
+    wallClone.querySelectorAll('.el-preview').forEach(n => n.remove());
+    wallClone.removeAttribute('width');
+    wallClone.removeAttribute('height');
+    wallClone.removeAttribute('style');
+    inner += `<g id="wall-layer">${wallClone.innerHTML}</g>`;
+  }
+
+  // 土地レイヤー（セグメント・ラベル・頂点のみ）
+  if (landSvg) {
+    const landClone = landSvg.cloneNode(true);
+    landClone.querySelectorAll('.land-fill').forEach(n => n.remove());
+    landClone.removeAttribute('width');
+    landClone.removeAttribute('height');
+    landClone.removeAttribute('style');
+    inner += `<g id="land-lines">${landClone.innerHTML}</g>`;
+  }
+
+  // コンパスインジケーター（グリッド左上）
+  const compassDeg = state.compass ?? 0;
+  const COMPASS_LABELS = ['北↑','北東↗','東→','南東↘','南↓','南西↙','西←','北西↖'];
+  const compassText = COMPASS_LABELS[Math.round(compassDeg / 45) % 8];
+  inner += `
+    <g transform="translate(10,10)">
+      <rect width="36" height="36" rx="18" fill="rgba(255,255,255,0.85)" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="18" y="23" text-anchor="middle" font-size="18" font-family="sans-serif" transform="rotate(${compassDeg},18,18)">↑</text>
+      <title>方位: ${escSVG(compassText)}</title>
+    </g>`;
+
+  return { svgStr: `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs><style><![CDATA[${css}]]></style></defs>
+  ${inner}
+</svg>`, W, H };
+}
+
+function exportSVG() {
+  const { svgStr } = buildSVGString();
+  const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `madori_${state.currentFloor + 1}F_${new Date().toISOString().slice(0,10)}.svg`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportPNG() {
+  const { svgStr, W, H } = buildSVGString();
+  const blob   = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+  const svgUrl = URL.createObjectURL(blob);
+  const img    = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width  = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(svgUrl);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `madori_${state.currentFloor + 1}F_${new Date().toISOString().slice(0,10)}.png`;
+    a.click();
+  };
+  img.src = svgUrl;
+}
+
+function escSVG(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderAreaSummary(panel) {
   const rows = state.floors.map((fl, fi) => {
     const rooms = (fl.rooms || []).filter(r => !getTypeById(r.typeId).isVoid && r.typeId !== 'garage');
@@ -1677,9 +1893,9 @@ function renderIrregularRoomInspector(panel, room) {
 // コンパスインジケーター
 // ============================================================
 function renderCompassIndicator() {
-  const wrapper = document.getElementById('canvas-wrapper');
+  const gridEl = document.getElementById('grid');
   let ind = document.getElementById('compass-indicator');
-  if (!ind) { ind = document.createElement('div'); ind.id = 'compass-indicator'; wrapper.appendChild(ind); }
+  if (!ind) { ind = document.createElement('div'); ind.id = 'compass-indicator'; gridEl.appendChild(ind); }
   const deg = state.compass ?? 0;
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
   const label = dirs[Math.round(deg/45)%8];

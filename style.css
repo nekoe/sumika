@@ -481,12 +481,12 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ============================================================
-   コンパスインジケーター（グリッド右下）
+   コンパスインジケーター（グリッド左上）
    ============================================================ */
 #compass-indicator {
   position: absolute;
-  bottom: 36px;
-  right: 36px;
+  top: 8px;
+  left: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1260,4 +1260,58 @@ body {
   fill: #166534;
   font-weight: 600;
   font-family: monospace;
+}
+
+/* ─────────────────────────────────────────────────────────
+   PDF出力（印刷）
+───────────────────────────────────────────────────────── */
+#print-header {
+  display: none;
+  font-size: 13px;
+  font-family: sans-serif;
+  color: #334155;
+  padding: 0 0 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #cbd5e1;
+}
+#print-header .print-date { color: #94a3b8; }
+
+@media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  body { background: #fff !important; }
+
+  body.printing #toolbar,
+  body.printing #palette,
+  body.printing #inspector  { display: none !important; }
+
+  body.printing #main {
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.printing #canvas-wrapper {
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  body.printing #print-header { display: block !important; }
+
+  body.printing #grid {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body.printing #paint-canvas { display: none !important; }
+
+  body.printing .resize-handle,
+  body.printing .furn-delete,
+  body.printing .room-edit-btn,
+  body.printing .drop-highlight { display: none !important; }
 }
