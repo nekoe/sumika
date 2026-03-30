@@ -117,7 +117,8 @@ document.addEventListener('DOMContentLoaded', () => {
     onSave:              () => { saveProject(state); showToast('保存しました'); },
     onExport:            () => exportJSON(state),
     onImport:            file => importJSON(file, data => {
-      pushUndo();
+      undoStack = [];
+      redoStack = [];
       applyProjectData(data);
       grid = createGrid(state.gridCols, state.gridRows);
       rebuildGrid(grid, state.rooms);
