@@ -302,7 +302,7 @@ function buildScene(scene, floors, state) {
     })() : new Set();
 
     // 壁・建具
-    const { wallSegs, doorMap } = generateWalls(scene, { rooms, elements, stairs }, baseY, belowVoidCells, lowerOccupied);
+    const { wallSegs, doorMap } = generateWalls(scene, { rooms, elements, stairs }, baseY, belowVoidCells, lowerOccupied, aboveVoidCells);
 
     // 不定形部屋はセルごとにrectを生成（バウンディングボックスより正確な衝突判定）
     // void部屋は歩行不可（吹き抜け）
@@ -808,7 +808,7 @@ function genFridge(scene, x, z, fw, fd, baseY) {
 // ─────────────────────────────────────────────────────────
 // 壁・建具生成
 // ─────────────────────────────────────────────────────────
-function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), lowerOccupied = new Set()) {
+function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), lowerOccupied = new Set(), aboveVoidCells = new Set()) {
   const { rooms, elements, stairs } = floorState;
   const occupied  = new Set();
   const domaCells = new Set();
@@ -875,9 +875,11 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
     const wallY0 = (domaCells.has(cellA) || domaCells.has(cellB)) ? baseY - DOMA_DROP
                  : (belowVoidCells.has(neighKey) && lowerOccupied.has(ownCell)) ? baseY - FLOOR_H
                  : baseY;
-    const wallTop = (voidCells.has(cellA) || voidCells.has(cellB)) ? baseY + FLOOR_H : baseY + WALL_H;
+    const needsFullHeight = voidCells.has(cellA) || voidCells.has(cellB)
+                          || aboveVoidCells.has(cellA) || aboveVoidCells.has(cellB);
+    const wallTop = needsFullHeight ? baseY + FLOOR_H : baseY + WALL_H;
     if (type === 'door') {
-      addDoorGeometry(scene, doorMat, wallMat, dir, col, row, el?.flip || false, wallSegs, doorMap, wallY0);
+      addDoorGeometry(scene, doorMat, wallMat, dir, col, row, el?.flip || false, wallSegs, doorMap, wallY0, wallTop);
     } else if (type === 'window') {
       addWallSeg(scene, wallMat,  dir, col, row, wallY0,            wallY0 + WIN_LOW);
       addWallSeg(scene, glassMat, dir, col, row, wallY0 + WIN_LOW,  wallY0 + WIN_HIGH);
@@ -942,11 +944,12 @@ function addWallSeg(scene, mat, dir, col, row, y0, y1) {
 // ─────────────────────────────────────────────────────────
 // ドアジオメトリ
 // ─────────────────────────────────────────────────────────
-function addDoorGeometry(scene, doorMat, wallMat, dir, col, row, flip, wallSegs, doorMap, baseY) {
+function addDoorGeometry(scene, doorMat, wallMat, dir, col, row, flip, wallSegs, doorMap, baseY, wallTop) {
   const x = col * CELL, z = row * CELL;
-  const topH = WALL_H - DOOR_H;
+  if (wallTop === undefined) wallTop = baseY + WALL_H;
+  const topH = wallTop - baseY - DOOR_H;
 
-  if (topH > 0.02) addWallSeg(scene, wallMat, dir, col, row, baseY + DOOR_H, baseY + WALL_H);
+  if (topH > 0.02) addWallSeg(scene, wallMat, dir, col, row, baseY + DOOR_H, wallTop);
 
   const frameMat = new THREE.MeshLambertMaterial({ color: 0xe0d0b8 });
   const FW = 0.05;
