@@ -1261,6 +1261,18 @@ body {
   font-weight: 600;
   font-family: monospace;
 }
+.land-rotate-line {
+  stroke: #3b82f6;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+.land-rotate-handle {
+  fill: #3b82f6;
+  stroke: #fff;
+  stroke-width: 2;
+  cursor: crosshair;
+}
 
 /* ─────────────────────────────────────────────────────────
    PDF出力（印刷）

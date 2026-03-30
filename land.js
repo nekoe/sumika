@@ -8,6 +8,30 @@ export function initLandLayer(gridEl) {
   return svg;
 }
 
+export function calcCentroid(points) {
+  const n = points.length;
+  if (n === 0) return { x: 0, y: 0 };
+  return {
+    x: points.reduce((s, p) => s + p.x, 0) / n,
+    y: points.reduce((s, p) => s + p.y, 0) / n,
+  };
+}
+
+export function rotatePointsAround(points, cx, cy, angle) {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  return points.map(p => ({
+    x: cx + (p.x - cx) * cos - (p.y - cy) * sin,
+    y: cy + (p.x - cx) * sin + (p.y - cy) * cos,
+  }));
+}
+
+// 回転ハンドルの位置（セル座標）: 重心から上方向に HANDLE_OFFSET セル
+const HANDLE_OFFSET = 2;
+export function getRotateHandlePos(points) {
+  const c = calcCentroid(points);
+  return { x: c.x, y: c.y - HANDLE_OFFSET };
+}
+
 export function renderLand(svgEl, land, cellSize, gridCols, gridRows, previewPt) {
   svgEl.innerHTML = '';
   svgEl.setAttribute('width',  gridCols * cellSize);
@@ -44,6 +68,26 @@ export function renderLand(svgEl, land, cellSize, gridCols, gridRows, previewPt)
     c.setAttribute('r', i === 0 ? 7 : 5);
     c.setAttribute('class', i === 0 ? 'land-point land-first' : 'land-point');
     svgEl.appendChild(c);
+  }
+
+  // 回転ハンドル（閉じたポリゴンのみ）
+  if (closed && pts.length >= 3) {
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+    const hx = cx, hy = cy - HANDLE_OFFSET * cellSize;
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', cx); line.setAttribute('y1', cy);
+    line.setAttribute('x2', hx); line.setAttribute('y2', hy);
+    line.setAttribute('class', 'land-rotate-line');
+    svgEl.appendChild(line);
+
+    const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    handle.setAttribute('cx', hx);
+    handle.setAttribute('cy', hy);
+    handle.setAttribute('r', 8);
+    handle.setAttribute('class', 'land-rotate-handle');
+    svgEl.appendChild(handle);
   }
 }
 

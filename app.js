@@ -7,7 +7,7 @@ import { initToolbar } from './toolbar.js';
 import { initWallLayer, renderWallLayer, getEdgeAt, edgeKey, ELEMENT_TOOLS } from './walls.js';
 import { startWalkthrough } from './walkthrough.js';
 import { getFurnitureTypeById } from './furniture.js';
-import { initLandLayer, renderLand, getLandPos, distPx, calcLandArea, getHitVertex } from './land.js';
+import { initLandLayer, renderLand, getLandPos, distPx, calcLandArea, getHitVertex, calcCentroid, rotatePointsAround, getRotateHandlePos } from './land.js';
 
 const AUTOSAVE_INTERVAL = 5000; // ms
 
@@ -46,6 +46,10 @@ let landSvg = null;
 let landPreview = null;
 let landDragIdx = -1;   // ドラッグ中の頂点インデックス（-1=なし）
 let landDragged = false; // ドラッグが発生したか（click誤発火防止）
+let landRotating = false;          // 回転ハンドルドラッグ中
+let landRotateCenter = null;       // 回転中心（セル座標）
+let landRotateStartAngle = 0;      // ドラッグ開始時の角度
+let landRotateStartPoints = null;  // ドラッグ開始時の頂点スナップショット
 let hoveredEdge = null;
 let selectedId = null;
 let selectedStairId = null;
@@ -363,10 +367,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // 土地描画モード
   const gridElForLand = document.getElementById('grid');
 
-  // 頂点ドラッグ開始
+  // 頂点ドラッグ・回転ハンドルドラッグ開始
   gridElForLand.addEventListener('mousedown', e => {
     if (state.mode !== 'land') return;
-    const idx = getHitVertex(e, gridElForLand, state.cellSize, state.land);
+    const cs = state.cellSize;
+    const pos = getLandPos(e, gridElForLand, cs);
+
+    // 回転ハンドル判定（閉じたポリゴンのみ）
+    if (state.land?.closed && (state.land.points?.length ?? 0) >= 3) {
+      const handlePos = getRotateHandlePos(state.land.points);
+      if (distPx(pos, handlePos, cs) <= 12) {
+        e.preventDefault();
+        pushUndo();
+        const c = calcCentroid(state.land.points);
+        landRotating = true;
+        landRotateCenter = c;
+        landRotateStartAngle = Math.atan2(pos.y - c.y, pos.x - c.x);
+        landRotateStartPoints = state.land.points.map(p => ({ ...p }));
+        return;
+      }
+    }
+
+    // 頂点ドラッグ判定
+    const idx = getHitVertex(e, gridElForLand, cs, state.land);
     if (idx === -1) return;
     e.preventDefault();
     pushUndo();
@@ -376,6 +399,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ドラッグ終了
   document.addEventListener('mouseup', () => {
+    if (landRotating) {
+      landRotating = false;
+      landRotateStartPoints = null;
+      saveProject(state);
+      return;
+    }
     if (landDragIdx < 0) return;
     landDragIdx = -1;
     if (landDragged) saveProject(state);
@@ -384,10 +413,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   gridElForLand.addEventListener('mousemove', e => {
     if (state.mode !== 'land') return;
+    const cs = state.cellSize;
+
+    // 回転ドラッグ中
+    if (landRotating && landRotateStartPoints) {
+      const pos = getLandPos(e, gridElForLand, cs);
+      const angle = Math.atan2(pos.y - landRotateCenter.y, pos.x - landRotateCenter.x);
+      const delta = angle - landRotateStartAngle;
+      state.land = {
+        ...state.land,
+        points: rotatePointsAround(landRotateStartPoints, landRotateCenter.x, landRotateCenter.y, delta),
+      };
+      renderLandLayer();
+      return;
+    }
 
     // 頂点ドラッグ中
     if (landDragIdx >= 0) {
-      const pos = getLandPos(e, gridElForLand, state.cellSize);
+      const pos = getLandPos(e, gridElForLand, cs);
       const pts = [...(state.land?.points ?? [])];
       pts[landDragIdx] = pos;
       state.land = { ...state.land, points: pts };
@@ -396,8 +439,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // カーソル変更（頂点ホバー時はgrab）
-    const hitIdx = getHitVertex(e, gridElForLand, state.cellSize, state.land);
+    // カーソル変更（回転ハンドル・頂点ホバー時）
+    if (state.land?.closed && (state.land.points?.length ?? 0) >= 3) {
+      const pos = getLandPos(e, gridElForLand, cs);
+      const handlePos = getRotateHandlePos(state.land.points);
+      if (distPx(pos, handlePos, cs) <= 12) {
+        gridElForLand.style.cursor = 'crosshair';
+        landPreview = null;
+        renderLandLayer();
+        return;
+      }
+    }
+    const hitIdx = getHitVertex(e, gridElForLand, cs, state.land);
     gridElForLand.style.cursor = hitIdx >= 0 ? 'grab' : '';
 
     // 描画中プレビュー
@@ -718,6 +771,8 @@ function handleModeChange(mode) {
   }
   landPreview = null;
   landDragIdx = -1;
+  landRotating = false;
+  landRotateStartPoints = null;
   document.getElementById('grid').style.cursor = '';
   renderLandLayer();
   updateInspector();
