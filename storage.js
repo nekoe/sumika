@@ -13,6 +13,7 @@ export function saveProject(state) {
       floors:       state.floors,
       compass:      state.compass     ?? 0,
       sunHour:      state.sunHour     ?? 12,
+      wallColor:    state.wallColor   ?? '#1e293b',
       stairConfig:  state.stairConfig ?? { w: 2, h: 3, dir: 'n' },
       land:         state.land ?? { points: [], closed: false },
     };
@@ -69,6 +70,7 @@ export function exportJSON(state) {
     floors:       state.floors,
     compass:      state.compass     ?? 0,
     sunHour:      state.sunHour     ?? 12,
+    wallColor:    state.wallColor   ?? '#1e293b',
     stairConfig:  state.stairConfig ?? { w: 2, h: 3, dir: 'n' },
     land:         state.land ?? { points: [], closed: false },
     exportedAt:   new Date().toISOString(),

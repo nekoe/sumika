@@ -2,7 +2,7 @@
 import { ELEMENT_TOOLS } from './walls.js';
 import { FURNITURE_TYPES } from './furniture.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear, onPrint, onExportSVG, onExportPNG }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear, onPrint, onExportSVG, onExportPNG, onWallColorChange }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
     `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
   ).join('');
@@ -84,6 +84,8 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       <div id="ctx-element" class="tb-ctx" style="display:none">
         <span class="tb-ctx-label">建具:</span>
         ${elementToolBtns}
+        <div class="tb-sep"></div>
+        <label title="壁の色（全壁に一括適用）">🎨<input type="color" id="wall-color-pick" value="${state.wallColor ?? '#1e293b'}" style="width:36px;height:22px;padding:0;border:none;cursor:pointer"></label>
       </div>
       <!-- 家具モード: 家具タイプ -->
       <div id="ctx-furniture" class="tb-ctx" style="display:none">
@@ -179,6 +181,10 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   });
 
   // ── ファイル操作 ──────────────────────────────────────
+  document.getElementById('wall-color-pick').addEventListener('input', e => {
+    onWallColorChange?.(e.target.value);
+  });
+
   document.getElementById('btn-save').addEventListener('click', onSave);
   document.getElementById('btn-print').addEventListener('click', () => onPrint?.());
   document.getElementById('btn-export-svg').addEventListener('click', () => onExportSVG?.());
@@ -265,6 +271,10 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       if (isElement) {
         container.querySelectorAll('.el-tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === mode));
       }
+    },
+    syncWallColor(color) {
+      const el = document.getElementById('wall-color-pick');
+      if (el) el.value = color ?? '#1e293b';
     },
     syncFurnitureType(ftype) {
       container.querySelectorAll('.furn-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ftype === ftype));

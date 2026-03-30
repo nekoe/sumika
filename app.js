@@ -25,6 +25,7 @@ let state = {
   ],
   mode: 'room',
   elementTool: 'wall',
+  wallColor: '#1e293b',
   furnitureType: 'kitchen',
   compass: 0,
   sunHour: 12,
@@ -70,6 +71,7 @@ function applyProjectData(data) {
   state.cellSize     = data.cellSize     ?? 44;
   state.compass      = data.compass      ?? 0;
   state.sunHour      = data.sunHour      ?? 12;
+  state.wallColor    = data.wallColor    ?? '#1e293b';
   state.currentFloor = data.currentFloor ?? 0;
   if (data.stairConfig) state.stairConfig = data.stairConfig;
   if (data.floors) {
@@ -126,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
       toolbar.syncSliders(state);
       toolbar.syncFloor(state.currentFloor);
       toolbar.syncStairConfig(state.stairConfig);
+      toolbar.syncWallColor(state.wallColor);
       renderCompassIndicator();
       showToast('読み込みました');
     }, msg => alert(msg)),
@@ -139,6 +142,12 @@ document.addEventListener('DOMContentLoaded', () => {
       state.land = { points: [], closed: false };
       landPreview = null;
       renderLandLayer();
+      saveProject(state);
+    },
+    onWallColorChange: (color) => {
+      state.wallColor = color;
+      state.elements.forEach(el => { el.color = color; });
+      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
       saveProject(state);
     },
     onCompassChange: () => { renderCompassIndicator(); saveProject(state); },
@@ -1222,9 +1231,9 @@ function handleElementClick(edge) {
   if (existIdx !== -1) {
     const exist = state.elements[existIdx];
     if (exist.type === state.mode) state.elements.splice(existIdx, 1);
-    else state.elements[existIdx] = { id: key, type: state.mode, col: edge.col, row: edge.row, dir: edge.dir };
+    else state.elements[existIdx] = { id: key, type: state.mode, col: edge.col, row: edge.row, dir: edge.dir, color: state.wallColor };
   } else {
-    state.elements.push({ id: key, type: state.mode, col: edge.col, row: edge.row, dir: edge.dir });
+    state.elements.push({ id: key, type: state.mode, col: edge.col, row: edge.row, dir: edge.dir, color: state.wallColor });
   }
   renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
   updateInspector();

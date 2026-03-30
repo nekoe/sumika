@@ -852,6 +852,14 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
     roughness: 0.05, metalness: 0, side: THREE.DoubleSide,
   });
   const doorMat  = new THREE.MeshLambertMaterial({ color: 0xc8a870 });
+  const matCache = new Map();
+  function getElWallMat(el) {
+    if (!el?.color) return wallMat;
+    if (matCache.has(el.color)) return matCache.get(el.color);
+    const m = new THREE.MeshLambertMaterial({ color: parseInt(el.color.replace('#', ''), 16) });
+    matCache.set(el.color, m);
+    return m;
+  }
 
   const wallSegs = [];
   const doorMap  = new Map();
@@ -878,27 +886,28 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
     const needsFullHeight = voidCells.has(cellA) || voidCells.has(cellB)
                           || aboveVoidCells.has(cellA) || aboveVoidCells.has(cellB);
     const wallTop = needsFullHeight ? baseY + FLOOR_H : baseY + WALL_H;
+    const eMat = getElWallMat(el);
     if (type === 'door') {
-      addDoorGeometry(scene, doorMat, wallMat, dir, col, row, el?.flip || false, wallSegs, doorMap, wallY0, wallTop);
+      addDoorGeometry(scene, doorMat, eMat, dir, col, row, el?.flip || false, wallSegs, doorMap, wallY0, wallTop);
     } else if (type === 'window') {
-      addWallSeg(scene, wallMat,  dir, col, row, wallY0,            wallY0 + WIN_LOW);
+      addWallSeg(scene, eMat,     dir, col, row, wallY0,            wallY0 + WIN_LOW);
       addWallSeg(scene, glassMat, dir, col, row, wallY0 + WIN_LOW,  wallY0 + WIN_HIGH);
-      if (WALL_H - WIN_HIGH > 0.02) addWallSeg(scene, wallMat, dir, col, row, wallY0 + WIN_HIGH, wallTop);
+      if (WALL_H - WIN_HIGH > 0.02) addWallSeg(scene, eMat, dir, col, row, wallY0 + WIN_HIGH, wallTop);
       wallSegs.push({ dir, col, row, open: false });
     } else if (type === 'window_tall') {
       addWallSeg(scene, glassMat, dir, col, row, wallY0, wallY0 + 2.0);
-      if (WALL_H - 2.0 > 0.02) addWallSeg(scene, wallMat, dir, col, row, wallY0 + 2.0, wallTop);
+      if (WALL_H - 2.0 > 0.02) addWallSeg(scene, eMat, dir, col, row, wallY0 + 2.0, wallTop);
       wallSegs.push({ dir, col, row, open: false });
     } else if (type === 'window_low') {
-      addWallSeg(scene, wallMat,  dir, col, row, wallY0,        wallY0 + 1.5);
+      addWallSeg(scene, eMat,     dir, col, row, wallY0,        wallY0 + 1.5);
       addWallSeg(scene, glassMat, dir, col, row, wallY0 + 1.5,  wallY0 + Math.min(2.2, WALL_H));
-      if (WALL_H - 2.2 > 0.02) addWallSeg(scene, wallMat, dir, col, row, wallY0 + 2.2, wallTop);
+      if (WALL_H - 2.2 > 0.02) addWallSeg(scene, eMat, dir, col, row, wallY0 + 2.2, wallTop);
       wallSegs.push({ dir, col, row, open: false });
     } else if (type === 'lowwall') {
-      addWallSeg(scene, wallMat, dir, col, row, wallY0, wallY0 + WALL_H / 3);
+      addWallSeg(scene, eMat, dir, col, row, wallY0, wallY0 + WALL_H / 3);
       wallSegs.push({ dir, col, row, open: false });
     } else {
-      addWallSeg(scene, wallMat, dir, col, row, wallY0, wallTop);
+      addWallSeg(scene, eMat, dir, col, row, wallY0, wallTop);
       wallSegs.push({ dir, col, row, open: false });
     }
   }
@@ -918,7 +927,7 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
     if (added.has(k)) continue;
     added.add(k);
     const h = el.type === 'lowwall' ? WALL_H / 3 : WALL_H;
-    addWallSeg(scene, wallMat, el.dir, el.col, el.row, baseY, baseY + h);
+    addWallSeg(scene, getElWallMat(el), el.dir, el.col, el.row, baseY, baseY + h);
     wallSegs.push({ dir: el.dir, col: el.col, row: el.row, open: false });
   }
 

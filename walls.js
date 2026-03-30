@@ -88,20 +88,21 @@ function svgLine(parent, x1, y1, x2, y2, cls) {
 }
 
 function renderElement(svgEl, el, cs) {
-  if (el.type === 'wall')        renderWall(svgEl, el.col, el.row, el.dir, cs);
-  if (el.type === 'lowwall')     renderLowWall(svgEl, el.col, el.row, el.dir, cs);
+  if (el.type === 'wall')        renderWall(svgEl, el.col, el.row, el.dir, cs, el.color);
+  if (el.type === 'lowwall')     renderLowWall(svgEl, el.col, el.row, el.dir, cs, el.color);
   if (el.type === 'door')        renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false);
   if (el.type === 'window')      renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window');
   if (el.type === 'window_tall') renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window-tall');
   if (el.type === 'window_low')  renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window-low');
 }
 
-function renderWall(svgEl, col, row, dir, cs) {
+function renderWall(svgEl, col, row, dir, cs, color) {
   const c = edgeCoords(col, row, dir, cs);
-  svgLine(svgEl, c.x1, c.y1, c.x2, c.y2, 'el-wall');
+  const line = svgLine(svgEl, c.x1, c.y1, c.x2, c.y2, 'el-wall');
+  if (color) line.style.stroke = color;
 }
 
-function renderLowWall(svgEl, col, row, dir, cs) {
+function renderLowWall(svgEl, col, row, dir, cs, color) {
   const c = edgeCoords(col, row, dir, cs);
   // 腰壁：細い二重線で「低い壁」を表現
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -119,6 +120,7 @@ function renderLowWall(svgEl, col, row, dir, cs) {
     l2.setAttribute('x1', c.x1 + 2); l2.setAttribute('y1', c.y1);
     l2.setAttribute('x2', c.x2 + 2); l2.setAttribute('y2', c.y2);
   }
+  if (color) { l1.style.stroke = color; l2.style.stroke = color; }
   g.appendChild(l1);
   g.appendChild(l2);
   svgEl.appendChild(g);
