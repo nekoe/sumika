@@ -984,16 +984,19 @@ function renderFurniture() {
   const cs = state.cellSize;
   for (const furn of (state.furniture || [])) {
     const ftype = getFurnitureTypeById(furn.typeId);
+    const displayColor = furn.color ?? ftype.color;
+    const displayIcon  = furn.icon  ?? ftype.icon;
+    const displayLabel = furn.label ?? ftype.label;
     const div = document.createElement('div');
     const isSelected = furn.id === selectedFurnitureId;
     div.className = 'furniture-block' + (isSelected ? ' selected' : '') + (multiSelected.has(furn.id) ? ' multi-selected' : '');
     div.dataset.id = furn.id;
     div.dataset.x  = furn.x; div.dataset.y = furn.y;
     div.dataset.w  = furn.w; div.dataset.h = furn.h;
-    div.style.cssText = `left:${furn.x*cs}px;top:${furn.y*cs}px;width:${furn.w*cs}px;height:${furn.h*cs}px;background-color:${ftype.color};`;
+    div.style.cssText = `left:${furn.x*cs}px;top:${furn.y*cs}px;width:${furn.w*cs}px;height:${furn.h*cs}px;background-color:${displayColor};`;
     div.innerHTML = `
-      <span class="furn-icon">${ftype.icon}</span>
-      <span class="furn-label">${ftype.label}</span>
+      <span class="furn-icon">${displayIcon}</span>
+      <span class="furn-label">${displayLabel}</span>
       <button class="furn-delete" title="削除">×</button>`;
 
     // 削除ボタン
@@ -1003,6 +1006,7 @@ function renderFurniture() {
       state.furniture = state.furniture.filter(f => f.id !== furn.id);
       selectedFurnitureId = null;
       renderFurniture();
+      updateInspector();
       saveProject(state);
     });
 
@@ -1015,6 +1019,7 @@ function renderFurniture() {
       if (state.mode !== 'furniture') return;
       selectedFurnitureId = (selectedFurnitureId === furn.id) ? null : furn.id;
       renderFurniture();
+      updateInspector();
     });
 
     // ドラッグで移動
@@ -1484,6 +1489,12 @@ function updateInspector() {
     if (stair) { renderStairInspector(panel, stair); return; }
   }
 
+  // 家具選択中
+  if (selectedFurnitureId && state.mode === 'furniture') {
+    const furn = (state.furniture || []).find(f => f.id === selectedFurnitureId);
+    if (furn) { renderFurnitureInspector(panel, furn); return; }
+  }
+
   const room = state.rooms.find(r => r.id === selectedId);
   if (!room) {
     renderAreaSummary(panel);
@@ -1780,6 +1791,56 @@ function exportPNG() {
 
 function escSVG(str) {
   return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── 家具インスペクター ────────────────────────────────────
+function renderFurnitureInspector(panel, furn) {
+  const ftype = getFurnitureTypeById(furn.typeId);
+  const label = furn.label ?? ftype.label;
+  const icon  = furn.icon  ?? ftype.icon;
+  const color = furn.color ?? ftype.color;
+
+  panel.innerHTML = `
+    <div class="inspector-header">
+      <span class="inspector-icon">${icon}</span>
+      <span class="inspector-title">${label}</span>
+    </div>
+    <div class="inspector-body">
+      <div class="inspector-row">
+        <label class="inspector-label">名前</label>
+        <input id="furn-insp-label" type="text" value="${label}" class="inspector-input" style="flex:1">
+      </div>
+      <div class="inspector-row">
+        <label class="inspector-label">アイコン</label>
+        <input id="furn-insp-icon" type="text" value="${icon}" class="inspector-input" style="width:60px;font-size:18px;text-align:center">
+      </div>
+      <div class="inspector-row">
+        <label class="inspector-label">色</label>
+        <input id="furn-insp-color" type="color" value="${color}" style="width:44px;height:28px;padding:0;border:none;cursor:pointer">
+      </div>
+    </div>`;
+
+  const commit = () => {
+    const newLabel = panel.querySelector('#furn-insp-label')?.value.trim() || label;
+    const newIcon  = panel.querySelector('#furn-insp-icon')?.value || icon;
+    const newColor = panel.querySelector('#furn-insp-color')?.value || color;
+    pushUndo();
+    furn.label = newLabel;
+    furn.icon  = newIcon;
+    furn.color = newColor;
+    renderFurniture();
+    renderFurnitureInspector(panel, furn);
+    saveProject(state);
+  };
+
+  panel.querySelector('#furn-insp-label').addEventListener('change', commit);
+  panel.querySelector('#furn-insp-icon').addEventListener('change', commit);
+  panel.querySelector('#furn-insp-color').addEventListener('input', e => {
+    furn.color = e.target.value;
+    const block = document.querySelector(`.furniture-block[data-id="${furn.id}"]`);
+    if (block) block.style.backgroundColor = e.target.value;
+  });
+  panel.querySelector('#furn-insp-color').addEventListener('change', commit);
 }
 
 function renderAreaSummary(panel) {

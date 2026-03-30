@@ -447,6 +447,36 @@ body {
   font-size: 12px;
   color: var(--color-text-muted);
 }
+.inspector-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.inspector-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inspector-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  width: 48px;
+  flex-shrink: 0;
+}
+.inspector-input {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  outline: none;
+  color: var(--color-text);
+  background: #fff;
+}
+.inspector-input:focus { border-color: var(--color-accent); }
 .inspector-info strong { color: var(--color-accent); font-size: 14px; }
 
 .btn-full { width: 100%; justify-content: center; padding: 8px; }
