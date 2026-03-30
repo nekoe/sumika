@@ -241,6 +241,10 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       document.getElementById('rows-val').textContent = s.gridRows;
       document.getElementById('cell-size').value = s.cellSize;
       document.getElementById('size-val').textContent = s.cellSize + 'px';
+      document.getElementById('inp-compass').value = s.compass ?? 0;
+      document.getElementById('compass-label').textContent = compassLabel(s.compass ?? 0);
+      document.getElementById('inp-sunhour').value = s.sunHour ?? 12;
+      document.getElementById('sunhour-label').textContent = sunHourLabel(s.sunHour ?? 12);
     },
     syncFloor(fi) {
       container.querySelectorAll('.floor-btn').forEach(b => b.classList.toggle('active', +b.dataset.floor === fi));

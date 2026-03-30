@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
       toolbar.syncSliders(state);
       toolbar.syncFloor(state.currentFloor);
       toolbar.syncStairConfig(state.stairConfig);
+      renderCompassIndicator();
       showToast('読み込みました');
     }, msg => alert(msg)),
     onRotate:        (dir) => rotateFloorPlan(dir > 0),
