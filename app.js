@@ -1595,7 +1595,7 @@ function handlePrint() {
   // ヘッダー内容を設定
   const headerEl = document.getElementById('print-header');
   const floorLabel = `${state.currentFloor + 1}F`;
-  const rooms = state.rooms.filter(r => !getTypeById(r.typeId).isVoid && r.typeId !== 'garage');
+  const rooms = state.rooms.filter(r => r.typeId !== 'garage');
   const cellCount = rooms.reduce((s, r) => s + (r.cells?.length ?? 0), 0);
   const sqm   = (cellCount * CELL_M * CELL_M).toFixed(1);
   const tsubo = (cellCount / 4).toFixed(2);
@@ -1845,7 +1845,7 @@ function renderFurnitureInspector(panel, furn) {
 
 function renderAreaSummary(panel) {
   const rows = state.floors.map((fl, fi) => {
-    const rooms = (fl.rooms || []).filter(r => !getTypeById(r.typeId).isVoid && r.typeId !== 'garage');
+    const rooms = (fl.rooms || []).filter(r => r.typeId !== 'garage');
     const cellCount = rooms.reduce((s, r) => s + r.cells.length, 0);
     const tsubo = (cellCount / 4).toFixed(2);
     const sqm   = (cellCount * CELL_M * CELL_M).toFixed(1);
