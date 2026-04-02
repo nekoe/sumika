@@ -1691,16 +1691,21 @@ function buildSVGString() {
         inner += `<rect x="${col*cs}" y="${row*cs}" width="${cs}" height="${cs}" fill="${color}" opacity="${opacity}"/>`;
       }
       if (fi === state.currentFloor) {
-        const cx = (room.x + room.w / 2) * cs;
-        const cy = (room.y + room.h / 2) * cs;
+        const rx = room.x * cs, ry = room.y * cs;
+        const rw = room.w * cs, rh = room.h * cs;
+        const cx = rx + rw / 2, cy = ry + rh / 2;
         const icon = room.icon ?? type.icon;
-        inner += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" font-size="13" font-family="sans-serif" fill="#374151">${escSVG(room.label)}</text>`;
-        inner += `<text x="${cx}" y="${cy + 11}" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#6b7280">${escSVG(icon)}</text>`;
+        const { tatami } = calcAreaCells(room.cells);
+        const STRIP_H = 16;
+        inner += `<rect x="${rx}" y="${ry}" width="${rw}" height="${STRIP_H}" fill="rgba(255,255,255,0.55)"/>`;
+        inner += `<text x="${rx + 5}" y="${ry + 11}" font-size="10" font-weight="600" font-family="sans-serif" fill="rgba(0,0,0,0.8)">${escSVG(room.label)}</text>`;
+        inner += `<text x="${rx + rw - 5}" y="${ry + 11}" text-anchor="end" font-size="10" font-family="sans-serif" fill="#6b7280">${escSVG(tatami)}畳</text>`;
+        inner += `<text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="20" font-family="sans-serif">${escSVG(icon)}</text>`;
       }
     }
     for (const s of (fl.stairs || [])) {
       const opacity2 = fi === state.currentFloor ? 1 : 0.3;
-      inner += `<rect x="${s.x*cs}" y="${s.y*cs}" width="${s.w*cs}" height="${s.h*cs}" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1" opacity="${opacity2}" rx="2"/>`;
+      inner += `<rect x="${s.x*cs}" y="${s.y*cs}" width="${s.w*cs}" height="${s.h*cs}" fill="url(#stair-stripe)" stroke="#b8a080" stroke-width="1" stroke-dasharray="4 3" opacity="${opacity2}" rx="2"/>`;
       if (fi === state.currentFloor) {
         const scx = (s.x + s.w / 2) * cs;
         const scy = (s.y + s.h / 2) * cs;
@@ -1751,9 +1756,18 @@ function buildSVGString() {
       <title>方位: ${escSVG(compassText)}</title>
     </g>`;
 
+  const defs = `
+  <defs>
+    <style><![CDATA[${css}]]></style>
+    <pattern id="stair-stripe" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="4" height="10" fill="rgba(180,160,130,0.3)"/>
+      <rect x="4" width="6" height="10" fill="rgba(240,232,220,0.3)"/>
+    </pattern>
+  </defs>`;
+
   return { svgStr: `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <defs><style><![CDATA[${css}]]></style></defs>
+  ${defs}
   ${inner}
 </svg>`, W, H };
 }
