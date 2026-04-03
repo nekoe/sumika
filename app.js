@@ -141,6 +141,25 @@ document.addEventListener('DOMContentLoaded', () => {
     onPrint:         () => handlePrint(),
     onExportSVG:     () => exportSVG(),
     onExportPNG:     () => exportPNG(),
+    onLandCopy: () => {
+      const land = state.land;
+      if (!land?.points?.length) { alert('コピーする土地形状がありません。'); return; }
+      localStorage.setItem('sumika_land_clipboard', JSON.stringify(land));
+      alert('土地形状をコピーしました。');
+    },
+    onLandPaste: () => {
+      const raw = localStorage.getItem('sumika_land_clipboard');
+      if (!raw) { alert('クリップボードに土地形状がありません。'); return; }
+      try {
+        const land = JSON.parse(raw);
+        if (!Array.isArray(land?.points)) throw new Error();
+        pushUndo();
+        state.land = land;
+        landPreview = null;
+        renderLandLayer();
+        saveProject(state);
+      } catch { alert('土地形状の読み込みに失敗しました。'); }
+    },
     onLandClear: () => {
       pushUndo();
       state.land = { points: [], closed: false };

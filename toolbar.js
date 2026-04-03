@@ -2,7 +2,7 @@
 import { ELEMENT_TOOLS } from './walls.js';
 import { FURNITURE_TYPES } from './furniture.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear, onPrint, onExportSVG, onExportPNG, onWallColorChange }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear, onLandCopy, onLandPaste, onPrint, onExportSVG, onExportPNG, onWallColorChange }) {
   const elementToolBtns = ELEMENT_TOOLS.map(t =>
     `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
   ).join('');
@@ -96,6 +96,8 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       <div id="ctx-land" class="tb-ctx" style="display:none">
         <span class="tb-ctx-label">土地:</span>
         <span id="land-area-label" class="tb-ctx-label">未完成</span>
+        <button id="btn-land-copy" title="土地形状をコピー">📋 コピー</button>
+        <button id="btn-land-paste" title="コピーした土地形状を貼り付け">📥 ペースト</button>
         <button id="btn-land-clear" title="土地をクリア">🗑 クリア</button>
         <span class="tb-ctx-label" style="color:#888;font-size:11px">クリックで頂点追加 / 始点クリックで閉じる / Escでキャンセル</span>
       </div>
@@ -197,6 +199,8 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     if (confirm('間取りをリセットしますか？この操作は元に戻せません。')) onReset();
   });
   document.getElementById('btn-walkthrough').addEventListener('click', () => onWalkthrough?.());
+  document.getElementById('btn-land-copy').addEventListener('click', () => onLandCopy?.());
+  document.getElementById('btn-land-paste').addEventListener('click', () => onLandPaste?.());
   document.getElementById('btn-land-clear').addEventListener('click', () => onLandClear?.());
 
   // ── 採光 ──────────────────────────────────────────────
