@@ -25,11 +25,20 @@ export function rotatePointsAround(points, cx, cy, angle) {
   }));
 }
 
-// 回転ハンドルの位置（セル座標）: 重心から上方向に HANDLE_OFFSET セル
-const HANDLE_OFFSET = 2;
-export function getRotateHandlePos(points) {
-  const c = calcCentroid(points);
-  return { x: c.x, y: c.y - HANDLE_OFFSET };
+// ポリゴン内部判定（ray-casting、セル座標）
+export function isPointInPolygon(pt, points) {
+  const n = points.length;
+  if (n < 3) return false;
+  let inside = false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = points[i].x, yi = points[i].y;
+    const xj = points[j].x, yj = points[j].y;
+    if (((yi > pt.y) !== (yj > pt.y)) &&
+        (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 export function renderLand(svgEl, land, cellSize, gridCols, gridRows, previewPt) {
@@ -70,25 +79,6 @@ export function renderLand(svgEl, land, cellSize, gridCols, gridRows, previewPt)
     svgEl.appendChild(c);
   }
 
-  // 回転ハンドル（閉じたポリゴンのみ）
-  if (closed && pts.length >= 3) {
-    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    const hx = cx, hy = cy - HANDLE_OFFSET * cellSize;
-
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', cx); line.setAttribute('y1', cy);
-    line.setAttribute('x2', hx); line.setAttribute('y2', hy);
-    line.setAttribute('class', 'land-rotate-line');
-    svgEl.appendChild(line);
-
-    const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    handle.setAttribute('cx', hx);
-    handle.setAttribute('cy', hy);
-    handle.setAttribute('r', 8);
-    handle.setAttribute('class', 'land-rotate-handle');
-    svgEl.appendChild(handle);
-  }
 }
 
 function _drawSegment(svgEl, a, b, cellSize) {

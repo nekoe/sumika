@@ -7,7 +7,7 @@ import { initToolbar } from './toolbar.js';
 import { initWallLayer, renderWallLayer, getEdgeAt, edgeKey, ELEMENT_TOOLS } from './walls.js';
 import { startWalkthrough } from './walkthrough.js';
 import { getFurnitureTypeById } from './furniture.js';
-import { initLandLayer, renderLand, getLandPos, distPx, calcLandArea, getHitVertex, calcCentroid, rotatePointsAround, getRotateHandlePos } from './land.js';
+import { initLandLayer, renderLand, getLandPos, distPx, calcLandArea, getHitVertex, calcCentroid, rotatePointsAround, isPointInPolygon } from './land.js';
 
 const AUTOSAVE_INTERVAL = 5000; // ms
 
@@ -50,6 +50,10 @@ let landRotating = false;          // 回転ハンドルドラッグ中
 let landRotateCenter = null;       // 回転中心（セル座標）
 let landRotateStartAngle = 0;      // ドラッグ開始時の角度
 let landRotateStartPoints = null;  // ドラッグ開始時の頂点スナップショット
+let landMoving = false;            // ポリゴン移動ドラッグ中
+let landMoveStartPos = null;       // 移動開始時のマウス座標（セル）
+let landMoveStartPoints = null;    // 移動開始時の頂点スナップショット
+let landMoved = false;             // 移動が発生したか
 let hoveredEdge = null;
 let selectedId = null;
 let selectedStairId = null;
@@ -387,34 +391,43 @@ document.addEventListener('DOMContentLoaded', () => {
   // 土地描画モード
   const gridElForLand = document.getElementById('grid');
 
-  // 頂点ドラッグ・回転ハンドルドラッグ開始
+  // 頂点ドラッグ・回転・移動 開始
   gridElForLand.addEventListener('mousedown', e => {
     if (state.mode !== 'land') return;
     const cs = state.cellSize;
     const pos = getLandPos(e, gridElForLand, cs);
 
-    // 回転ハンドル判定（閉じたポリゴンのみ）
-    if (state.land?.closed && (state.land.points?.length ?? 0) >= 3) {
-      const handlePos = getRotateHandlePos(state.land.points);
-      if (distPx(pos, handlePos, cs) <= 12) {
-        e.preventDefault();
-        pushUndo();
+    // 頂点ヒット判定（頂点操作が最優先）
+    const idx = getHitVertex(e, gridElForLand, cs, state.land);
+    if (idx !== -1) {
+      e.preventDefault();
+      pushUndo();
+      // 赤い頂点（idx===0）かつ閉じたポリゴン → 回転
+      if (idx === 0 && state.land?.closed && (state.land.points?.length ?? 0) >= 3) {
         const c = calcCentroid(state.land.points);
         landRotating = true;
         landRotateCenter = c;
         landRotateStartAngle = Math.atan2(pos.y - c.y, pos.x - c.x);
         landRotateStartPoints = state.land.points.map(p => ({ ...p }));
-        return;
+      } else {
+        // その他の頂点 → 頂点移動
+        landDragIdx = idx;
+        landDragged = false;
       }
+      return;
     }
 
-    // 頂点ドラッグ判定
-    const idx = getHitVertex(e, gridElForLand, cs, state.land);
-    if (idx === -1) return;
-    e.preventDefault();
-    pushUndo();
-    landDragIdx = idx;
-    landDragged = false;
+    // ポリゴン内部クリック → 全体移動
+    if (state.land?.closed && (state.land.points?.length ?? 0) >= 3) {
+      if (isPointInPolygon(pos, state.land.points)) {
+        e.preventDefault();
+        pushUndo();
+        landMoving = true;
+        landMoveStartPos = pos;
+        landMoveStartPoints = state.land.points.map(p => ({ ...p }));
+        landMoved = false;
+      }
+    }
   });
 
   // ドラッグ終了
@@ -423,6 +436,14 @@ document.addEventListener('DOMContentLoaded', () => {
       landRotating = false;
       landRotateStartPoints = null;
       saveProject(state);
+      return;
+    }
+    if (landMoving) {
+      landMoving = false;
+      landMoveStartPos = null;
+      landMoveStartPoints = null;
+      if (landMoved) saveProject(state);
+      landMoved = false;
       return;
     }
     if (landDragIdx < 0) return;
@@ -448,6 +469,20 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // ポリゴン移動ドラッグ中
+    if (landMoving && landMoveStartPoints) {
+      const pos = getLandPos(e, gridElForLand, cs);
+      const dx = pos.x - landMoveStartPos.x;
+      const dy = pos.y - landMoveStartPos.y;
+      state.land = {
+        ...state.land,
+        points: landMoveStartPoints.map(p => ({ x: p.x + dx, y: p.y + dy })),
+      };
+      landMoved = true;
+      renderLandLayer();
+      return;
+    }
+
     // 頂点ドラッグ中
     if (landDragIdx >= 0) {
       const pos = getLandPos(e, gridElForLand, cs);
@@ -459,19 +494,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // カーソル変更（回転ハンドル・頂点ホバー時）
-    if (state.land?.closed && (state.land.points?.length ?? 0) >= 3) {
-      const pos = getLandPos(e, gridElForLand, cs);
-      const handlePos = getRotateHandlePos(state.land.points);
-      if (distPx(pos, handlePos, cs) <= 12) {
-        gridElForLand.style.cursor = 'crosshair';
-        landPreview = null;
-        renderLandLayer();
-        return;
-      }
-    }
+    // カーソル変更（頂点・ポリゴン内部ホバー時）
+    const pos2 = getLandPos(e, gridElForLand, cs);
     const hitIdx = getHitVertex(e, gridElForLand, cs, state.land);
-    gridElForLand.style.cursor = hitIdx >= 0 ? 'grab' : '';
+    if (hitIdx === 0 && state.land?.closed) {
+      gridElForLand.style.cursor = 'crosshair'; // 赤い頂点 → 回転
+    } else if (hitIdx > 0) {
+      gridElForLand.style.cursor = 'grab';       // その他の頂点 → 移動
+    } else if (state.land?.closed && isPointInPolygon(pos2, state.land.points ?? [])) {
+      gridElForLand.style.cursor = 'move';       // ポリゴン内部 → 全体移動
+    } else {
+      gridElForLand.style.cursor = '';
+    }
 
     // 描画中プレビュー
     if (!state.land?.closed && (state.land?.points?.length ?? 0) > 0) {
@@ -793,6 +827,9 @@ function handleModeChange(mode) {
   landDragIdx = -1;
   landRotating = false;
   landRotateStartPoints = null;
+  landMoving = false;
+  landMoveStartPos = null;
+  landMoveStartPoints = null;
   document.getElementById('grid').style.cursor = '';
   renderLandLayer();
   updateInspector();
