@@ -57,7 +57,8 @@ let selectedFurnitureId = null;
 let multiSelected = new Set();
 // 複数選択中の ID 集合（room/stair/furniture）
 let multiMoveDragging = false;
-let multiIncludesElements = false; // 全選択時に建具も移動対象に含める
+let multiIncludesElements = false;   // 全選択時に建具も移動対象に含める
+let multiIncludesAllFloors = false;  // 全選択時に全フロアを移動対象に含める
 
 // セル編集
 let paintCells    = null;
@@ -1339,6 +1340,7 @@ function selectAll() {
   for (const s of state.stairs) multiSelected.add(s.id);
   for (const f of (state.furniture || [])) multiSelected.add(f.id);
   multiIncludesElements = true;
+  multiIncludesAllFloors = true;
   selectedId = null; selectedStairId = null; selectedFurnitureId = null;
   renderAll();
   showToast(`${multiSelected.size}個を選択 — ドラッグで一括移動、Escでキャンセル`);
@@ -1356,6 +1358,7 @@ function clearMultiSelected() {
   if (multiSelected.size === 0) return;
   multiSelected = new Set();
   multiIncludesElements = false;
+  multiIncludesAllFloors = false;
   renderAll();
   updateInspector();
 }
@@ -1446,6 +1449,25 @@ function commitMultiMove(dx, dy) {
     for (const el of (state.elements || [])) {
       el.col += dx;
       el.row += dy;
+    }
+  }
+  if (multiIncludesAllFloors) {
+    const otherFloorIdx = state.currentFloor === 0 ? 1 : 0;
+    const otherFloor = state.floors[otherFloorIdx];
+    for (const room of (otherFloor.rooms || [])) {
+      room.cells = room.cells.map(k => {
+        const [c, r] = k.split(',').map(Number);
+        return `${c+dx},${r+dy}`;
+      });
+      updateIrregularRoomBounds(room);
+    }
+    for (const el of (otherFloor.elements || [])) {
+      el.col += dx;
+      el.row += dy;
+    }
+    for (const furn of (otherFloor.furniture || [])) {
+      furn.x += dx;
+      furn.y += dy;
     }
   }
   renderAll();
