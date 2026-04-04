@@ -7,6 +7,7 @@ export const ELEMENT_TOOLS = [
   { id: 'window',      label: '窓(標準)',  icon: '🪟', color: '#0ea5e9' },
   { id: 'window_tall', label: '掃き出し窓', icon: '🟦', color: '#0284c7' },
   { id: 'window_low',  label: '高窓',      icon: '🔲', color: '#7dd3fc' },
+  { id: 'eraser',      label: '消しゴム',  icon: '🧹', color: '#ef4444', eraser: true },
 ];
 
 // エッジの一意キー: "h:col:row" or "v:col:row"

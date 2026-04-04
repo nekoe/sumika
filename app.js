@@ -59,6 +59,8 @@ let selectedId = null;
 let selectedStairId = null;
 let selectedFurnitureId = null;
 let multiSelected = new Set();
+let eraserDragging = false; // 消しゴムドラッグ中
+
 // 複数選択中の ID 集合（room/stair/furniture）
 let multiMoveDragging = false;
 let multiIncludesElements = false;   // 全選択時に建具も移動対象に含める
@@ -358,9 +360,28 @@ document.addEventListener('DOMContentLoaded', () => {
   }, { capture: true });
 
   // 壁・建具モード
+  svgEl.addEventListener('mousedown', e => {
+    if (state.mode !== 'eraser') return;
+    e.preventDefault();
+    const edge = getEdgeAt(e, document.getElementById('grid'), state.cellSize);
+    if (!edge) return;
+    pushUndo();
+    eraserDragging = true;
+    eraseAtEdge(edge);
+  });
+  document.addEventListener('mouseup', () => {
+    if (!eraserDragging) return;
+    eraserDragging = false;
+    saveProject(state);
+  });
   svgEl.addEventListener('mousemove', e => {
     if (state.mode === 'room' || state.mode === 'stair') return;
     hoveredEdge = getEdgeAt(e, document.getElementById('grid'), state.cellSize);
+    if (state.mode === 'eraser') {
+      if (eraserDragging) eraseAtEdge(hoveredEdge);
+      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
+      return;
+    }
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
   });
   svgEl.addEventListener('mouseleave', () => {
@@ -368,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
   });
   svgEl.addEventListener('click', e => {
-    if (state.mode === 'room' || state.mode === 'stair') return;
+    if (state.mode === 'room' || state.mode === 'stair' || state.mode === 'eraser') return;
     const edge = getEdgeAt(e, document.getElementById('grid'), state.cellSize);
     if (!edge) return;
     handleElementClick(edge);
@@ -1353,6 +1374,16 @@ function findFreePosition(grid, w, h) {
 // ============================================================
 // 壁・建具
 // ============================================================
+function eraseAtEdge(edge) {
+  if (!edge) return;
+  const key = edgeKey(edge.col, edge.row, edge.dir);
+  const idx = state.elements.findIndex(el => edgeKey(el.col, el.row, el.dir) === key);
+  if (idx === -1) return;
+  state.elements.splice(idx, 1);
+  renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
+  updateInspector();
+}
+
 function handleElementClick(edge) {
   const key = edgeKey(edge.col, edge.row, edge.dir);
   const existIdx = state.elements.findIndex(el => edgeKey(el.col, el.row, el.dir) === key);
@@ -1621,10 +1652,11 @@ function renderMultiSelectInspector(panel) {
 function renderElementInspector(panel) {
   const els = state.elements;
   const counts = {};
-  for (const t of ELEMENT_TOOLS) counts[t.id] = els.filter(e => e.type === t.id).length;
+  const buildTools = ELEMENT_TOOLS.filter(t => !t.eraser);
+  for (const t of buildTools) counts[t.id] = els.filter(e => e.type === t.id).length;
   const total = els.length;
 
-  const rows = ELEMENT_TOOLS.map(t => `
+  const rows = buildTools.map(t => `
     <div class="el-insp-row">
       <span class="el-insp-icon">${t.icon}</span>
       <span class="el-insp-label">${t.label}</span>
