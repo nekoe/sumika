@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     onWallColorChange: (color) => {
       state.wallColor = color;
-      state.elements.forEach(el => { el.color = color; });
+      state.floors.forEach(fl => fl.elements.forEach(el => { el.color = color; }));
       renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
       saveProject(state);
     },
