@@ -1937,8 +1937,8 @@ function buildSVGString() {
     <g transform="translate(8,8)">
       <rect width="44" height="44" rx="22" fill="rgba(255,255,255,0.85)" stroke="#e2e8f0" stroke-width="1"/>
       <g transform="rotate(${compassDeg},22,22)">
-        <polygon points="22,5 15,37 22,31 29,37" fill="#ef4444" opacity="0.85"/>
-        <text x="22" y="16" text-anchor="middle" font-size="11" font-weight="700" font-family="sans-serif" fill="#ef4444">N</text>
+        <polygon points="22,16 15,38 22,32 29,38" fill="#ef4444" opacity="0.85"/>
+        <text x="22" y="12" text-anchor="middle" font-size="11" font-weight="700" font-family="sans-serif" fill="#ef4444">N</text>
       </g>
       <title>方位: ${escSVG(compassText)}</title>
     </g>
