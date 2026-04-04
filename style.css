@@ -192,9 +192,7 @@ body {
   gap: 4px;
 }
 
-#palette::before {
-  content: '部屋パレット';
-  display: block;
+.palette-section-title {
   font-size: 11px;
   font-weight: 600;
   color: var(--color-text-muted);
@@ -204,6 +202,22 @@ body {
   border-bottom: 1px solid var(--color-border);
   margin-bottom: 4px;
 }
+.palette-item.active {
+  background: #eff6ff !important;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.palette-eraser { opacity: 0.75; }
+.palette-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+.palette-color-label { font-size: 12px; color: var(--color-text-muted); }
+.palette-color-row input[type="color"] { width: 36px; height: 24px; padding: 0; border: none; cursor: pointer; border-radius: 4px; }
 
 .palette-item {
   display: flex;
@@ -1145,7 +1159,7 @@ body {
 .furniture-block.selected .resize-handle,
 .furniture-block:hover .resize-handle { opacity: 1; }
 
-#grid[data-mode="furniture"] { cursor: copy; }
+#grid[data-mode="furniture"] { cursor: default; }
 #grid[data-mode="furniture"] .room-block { pointer-events: none; }
 
 @media (max-width: 600px) {

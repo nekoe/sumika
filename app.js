@@ -6,7 +6,7 @@ import { saveProject, loadProject, exportJSON, importJSON, resetProject } from '
 import { initToolbar } from './toolbar.js';
 import { initWallLayer, renderWallLayer, getEdgeAt, edgeKey, ELEMENT_TOOLS } from './walls.js';
 import { startWalkthrough } from './walkthrough.js';
-import { getFurnitureTypeById } from './furniture.js';
+import { getFurnitureTypeById, FURNITURE_TYPES } from './furniture.js';
 import { initLandLayer, renderLand, getLandPos, distPx, calcLandArea, getHitVertex, calcCentroid, rotatePointsAround, isPointInPolygon } from './land.js';
 
 const AUTOSAVE_INTERVAL = 5000; // ms
@@ -174,12 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderLandLayer();
       saveProject(state);
     },
-    onWallColorChange: (color) => {
-      state.wallColor = color;
-      state.floors.forEach(fl => fl.elements.forEach(el => { el.color = color; }));
-      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
-      saveProject(state);
-    },
     onCompassChange: () => { renderCompassIndicator(); saveProject(state); },
     onReset: () => {
       pushUndo();
@@ -197,11 +191,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   initDnd({
-    gridEl:    document.getElementById('grid'),
-    paletteEl: document.getElementById('palette'),
-    cellSize:  () => state.cellSize,
-    onDropNew: handleDropNew,
-    onMove:    handleMove,
+    gridEl:           document.getElementById('grid'),
+    paletteEl:        document.getElementById('palette'),
+    cellSize:         () => state.cellSize,
+    onDropNew:        handleDropNew,
+    onMove:           handleMove,
+    onDropFurniture:  handleFurnitureDropNew,
   });
 
   // グリッドクリック
@@ -221,13 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
       handleStairPlace(col, row);
       return;
     }
-    if (state.mode === 'furniture') {
-      if (e.target.closest('.furniture-block')) return; // furniture block itself handles click
-      // 空きエリアをクリック → 配置
-      const { col, row } = getGridCell(e);
-      handleFurniturePlace(col, row);
-      return;
-    }
+
     if (state.mode !== 'room') return;
     if (!e.target.closest('.room-block') && !e.target.closest('.room-cell') && !e.target.closest('.stair-block') && !e.target.closest('.furniture-block')) {
       if (multiSelected.size > 0) { clearMultiSelected(); return; }
@@ -823,6 +812,46 @@ function handleFloorChange(floorIdx) {
 }
 
 // ============================================================
+// パレット描画（モードに応じて切り替え）
+// ============================================================
+function renderElementPalette() {
+  const paletteEl = document.getElementById('palette');
+  paletteEl.innerHTML = '<div class="palette-section-title">建具</div>';
+  for (const t of ELEMENT_TOOLS) {
+    const item = document.createElement('div');
+    item.className = 'palette-item' + (state.mode === t.id ? ' active' : '') + (t.eraser ? ' palette-eraser' : '');
+    item.innerHTML = `<span class="palette-icon">${t.icon}</span><span class="palette-label">${t.label}</span>`;
+    item.addEventListener('click', () => { handleModeChange(t.id); toolbar.setMode(t.id); });
+    paletteEl.appendChild(item);
+  }
+  const colorRow = document.createElement('div');
+  colorRow.className = 'palette-color-row';
+  colorRow.innerHTML = `<span class="palette-color-label">🎨 壁色</span><input type="color" id="wall-color-pick" value="${state.wallColor ?? '#1e293b'}">`;
+  paletteEl.appendChild(colorRow);
+  document.getElementById('wall-color-pick').addEventListener('input', e => {
+    const color = e.target.value;
+    state.wallColor = color;
+    state.floors.forEach(fl => fl.elements.forEach(el => { el.color = color; }));
+    renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, hoveredEdge, state.mode);
+    saveProject(state);
+  });
+}
+
+function renderFurniturePalette() {
+  const paletteEl = document.getElementById('palette');
+  paletteEl.innerHTML = '<div class="palette-section-title">家具</div>';
+  for (const ftype of FURNITURE_TYPES) {
+    const item = document.createElement('div');
+    item.className = 'palette-item';
+    item.draggable = true;
+    item.dataset.furnTypeId = ftype.id;
+    item.style.background = ftype.color;
+    item.innerHTML = `<span class="palette-icon">${ftype.icon}</span><span class="palette-label">${ftype.label}</span>`;
+    paletteEl.appendChild(item);
+  }
+}
+
+// ============================================================
 // モード切替
 // ============================================================
 function handleModeChange(mode) {
@@ -838,10 +867,21 @@ function handleModeChange(mode) {
     selectedFurnitureId = null;
     renderFurniture();
   }
+
+  // パレット切替
+  const isElement = ELEMENT_TOOLS.some(t => t.id === mode);
+  if (mode === 'furniture') {
+    renderFurniturePalette();
+  } else if (isElement) {
+    renderElementPalette();
+  } else {
+    renderPalette(document.getElementById('palette'));
+  }
+
   const gridEl = document.getElementById('grid');
   gridEl.dataset.mode = mode;
-  document.getElementById('palette').style.pointerEvents = mode === 'room' ? '' : 'none';
-  document.querySelectorAll('.palette-item').forEach(el => el.draggable = (mode === 'room'));
+  // パレットの pointer-events は各パレット描画関数で管理
+  document.getElementById('palette').style.pointerEvents = '';
   if (mode !== 'stair') {
     renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
   }
@@ -1177,6 +1217,20 @@ function renderFurniture() {
 
     gridEl.appendChild(div);
   }
+}
+
+function handleFurnitureDropNew(typeId, col, row) {
+  const ftype = getFurnitureTypeById(typeId);
+  const x = Math.min(Math.max(0, col), state.gridCols - ftype.defaultW);
+  const y = Math.min(Math.max(0, row), state.gridRows - ftype.defaultH);
+  pushUndo();
+  const newFurn = { id: `furn-${Date.now()}`, typeId: ftype.id, x, y, w: ftype.defaultW, h: ftype.defaultH };
+  state.furniture.push(newFurn);
+  selectedFurnitureId = newFurn.id;
+  if (state.mode !== 'furniture') { handleModeChange('furniture'); toolbar.setMode('furniture'); }
+  renderFurniture();
+  updateInspector();
+  saveProject(state);
 }
 
 function handleFurniturePlace(col, row) {

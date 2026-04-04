@@ -1,23 +1,15 @@
 // ツールバーUI（2行コンパクトレイアウト）
-import { ELEMENT_TOOLS } from './walls.js';
-import { FURNITURE_TYPES } from './furniture.js';
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear, onLandCopy, onLandPaste, onPrint, onExportSVG, onExportPNG, onWallColorChange }) {
-  const elementToolBtns = ELEMENT_TOOLS.map(t =>
-    `<button class="mode-btn el-tool-btn" data-tool="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
-  ).join('');
+const sc0 = { w: 2, h: 3, dir: 'n' };
+const DIRS = [
+  { id: 'n', label: '↑北', title: '北向き（上が出口）' },
+  { id: 's', label: '↓南', title: '南向き（下が出口）' },
+  { id: 'e', label: '→東', title: '東向き' },
+  { id: 'w', label: '←西', title: '西向き' },
+];
 
-  const furnitureBtns = FURNITURE_TYPES.map(t =>
-    `<button class="mode-btn furn-type-btn${(state.furnitureType || 'kitchen') === t.id ? ' active' : ''}" data-ftype="${t.id}" title="${t.label}">${t.icon} ${t.label}</button>`
-  ).join('');
-
-  const sc = state.stairConfig || { w: 2, h: 3, dir: 'n' };
-  const DIRS = [
-    { id: 'n', label: '↑北', title: '北向き（上が出口）' },
-    { id: 's', label: '↓南', title: '南向き（下が出口）' },
-    { id: 'e', label: '→東', title: '東向き' },
-    { id: 'w', label: '←西', title: '西向き' },
-  ];
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear, onLandCopy, onLandPaste, onPrint, onExportSVG, onExportPNG }) {
+  const sc = state.stairConfig || sc0;
   const dirBtns = DIRS.map(d =>
     `<button class="dir-btn${sc.dir === d.id ? ' active' : ''}" data-dir="${d.id}" title="${d.title}">${d.label}</button>`
   ).join('');
@@ -80,18 +72,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <span class="tb-ctx-label">向き:</span>
         ${dirBtns}
       </div>
-      <!-- 建具モード: 壁/ドア/窓 -->
-      <div id="ctx-element" class="tb-ctx" style="display:none">
-        <span class="tb-ctx-label">建具:</span>
-        ${elementToolBtns}
-        <div class="tb-sep"></div>
-        <label title="壁の色（全壁に一括適用）">🎨<input type="color" id="wall-color-pick" value="${state.wallColor ?? '#1e293b'}" style="width:36px;height:22px;padding:0;border:none;cursor:pointer"></label>
-      </div>
-      <!-- 家具モード: 家具タイプ -->
-      <div id="ctx-furniture" class="tb-ctx" style="display:none">
-        <span class="tb-ctx-label">家具:</span>
-        ${furnitureBtns}
-      </div>
       <!-- 土地モード -->
       <div id="ctx-land" class="tb-ctx" style="display:none">
         <span class="tb-ctx-label">土地:</span>
@@ -142,18 +122,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     });
   });
 
-  // ── 建具サブツール ─────────────────────────────────────
-  container.querySelectorAll('.el-tool-btn[data-tool]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      container.querySelectorAll('.el-tool-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.elementTool = btn.dataset.tool;
-      onModeChange(btn.dataset.tool);
-    });
-  });
-  const firstTool = container.querySelector('.el-tool-btn');
-  if (firstTool) firstTool.classList.add('active');
-
   // ── グリッドサイズ ─────────────────────────────────────
   const colsInput = document.getElementById('grid-cols');
   const rowsInput = document.getElementById('grid-rows');
@@ -183,10 +151,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   });
 
   // ── ファイル操作 ──────────────────────────────────────
-  document.getElementById('wall-color-pick').addEventListener('input', e => {
-    onWallColorChange?.(e.target.value);
-  });
-
   document.getElementById('btn-save').addEventListener('click', onSave);
   document.getElementById('btn-print').addEventListener('click', () => onPrint?.());
   document.getElementById('btn-export-svg').addEventListener('click', () => onExportSVG?.());
@@ -222,21 +186,10 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); onSave(); }
   });
 
-  // ── 家具タイプ選択 ────────────────────────────────────
-  container.querySelectorAll('.furn-type-btn[data-ftype]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      container.querySelectorAll('.furn-type-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.furnitureType = btn.dataset.ftype;
-    });
-  });
-
   function _showCtx(mode) {
-    document.getElementById('ctx-room').style.display      = mode === 'room' ? 'flex' : 'none';
-    document.getElementById('ctx-stair').style.display     = mode === 'stair'     ? 'flex' : 'none';
-    document.getElementById('ctx-element').style.display   = mode === 'element'   ? 'flex' : 'none';
-    document.getElementById('ctx-furniture').style.display = mode === 'furniture' ? 'flex' : 'none';
-    document.getElementById('ctx-land').style.display      = mode === 'land'      ? 'flex' : 'none';
+    document.getElementById('ctx-room').style.display  = mode === 'room'  ? 'flex' : 'none';
+    document.getElementById('ctx-stair').style.display = mode === 'stair' ? 'flex' : 'none';
+    document.getElementById('ctx-land').style.display  = mode === 'land'  ? 'flex' : 'none';
   }
 
   return {
@@ -271,17 +224,11 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       container.querySelectorAll('.mode-btn[data-mode]').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === mode || (b.dataset.mode === 'element' && isElement));
       });
-      _showCtx(isElement ? 'element' : mode);
-      if (isElement) {
-        container.querySelectorAll('.el-tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === mode));
-      }
+      _showCtx(isElement ? null : mode);
     },
     syncWallColor(color) {
       const el = document.getElementById('wall-color-pick');
       if (el) el.value = color ?? '#1e293b';
-    },
-    syncFurnitureType(ftype) {
-      container.querySelectorAll('.furn-type-btn').forEach(b => b.classList.toggle('active', b.dataset.ftype === ftype));
     },
     updateLandArea(areaM2) {
       const el = document.getElementById('land-area-label');

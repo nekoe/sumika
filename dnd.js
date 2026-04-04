@@ -2,12 +2,18 @@
 
 let dragState = null;
 
-export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove }) {
+export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture }) {
   // --- パレット → グリッド（新規配置）---
   paletteEl.addEventListener('dragstart', e => {
     const item = e.target.closest('.palette-item');
     if (!item) return;
-    dragState = { mode: 'new', typeId: item.dataset.typeId };
+    if (item.dataset.typeId) {
+      dragState = { mode: 'new', typeId: item.dataset.typeId };
+    } else if (item.dataset.furnTypeId) {
+      dragState = { mode: 'furnNew', furnTypeId: item.dataset.furnTypeId };
+    } else {
+      return;
+    }
     e.dataTransfer.effectAllowed = 'copy';
   });
 
@@ -16,15 +22,9 @@ export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove }) {
     const room = e.target.closest('.room-block');
     if (!room) return;
     const rect = room.getBoundingClientRect();
-    const gridRect = gridEl.getBoundingClientRect();
     const offsetX = Math.floor((e.clientX - rect.left) / cellSize());
     const offsetY = Math.floor((e.clientY - rect.top) / cellSize());
-    dragState = {
-      mode: 'move',
-      roomId: room.dataset.id,
-      offsetX,
-      offsetY,
-    };
+    dragState = { mode: 'move', roomId: room.dataset.id, offsetX, offsetY };
     e.dataTransfer.effectAllowed = 'move';
     setTimeout(() => room.classList.add('dragging'), 0);
   });
@@ -42,49 +42,41 @@ export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove }) {
     if (!dragState) return;
     const { col, row } = getGridPos(e, gridEl, cellSize());
     if (dragState.mode === 'move') {
-      const targetX = col - (dragState.offsetX || 0);
-      const targetY = row - (dragState.offsetY || 0);
-      highlightDropTarget(gridEl, targetX, targetY, cellSize());
+      highlightDropTarget(gridEl, col - (dragState.offsetX || 0), row - (dragState.offsetY || 0), cellSize());
     } else {
       highlightDropTarget(gridEl, col, row, cellSize());
     }
-    e.dataTransfer.dropEffect = dragState.mode === 'new' ? 'copy' : 'move';
+    e.dataTransfer.dropEffect = dragState.mode === 'move' ? 'move' : 'copy';
   });
 
   gridEl.addEventListener('dragleave', e => {
-    if (!gridEl.contains(e.relatedTarget)) {
-      clearHighlight(gridEl);
-    }
+    if (!gridEl.contains(e.relatedTarget)) clearHighlight(gridEl);
   });
 
   gridEl.addEventListener('drop', e => {
     e.preventDefault();
     clearHighlight(gridEl);
     if (!dragState) return;
-
     const { col, row } = getGridPos(e, gridEl, cellSize());
-
     if (dragState.mode === 'new') {
       onDropNew(dragState.typeId, col, row);
+    } else if (dragState.mode === 'furnNew') {
+      onDropFurniture?.(dragState.furnTypeId, col, row);
     } else if (dragState.mode === 'move') {
-      const targetX = col - (dragState.offsetX || 0);
-      const targetY = row - (dragState.offsetY || 0);
-      onMove(dragState.roomId, targetX, targetY);
+      onMove(dragState.roomId, col - (dragState.offsetX || 0), row - (dragState.offsetY || 0));
     }
     dragState = null;
   });
 
   // --- タッチ対応（モバイル）---
-  initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove });
+  initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture });
 }
 
 function getGridPos(e, gridEl, cs) {
   const rect = gridEl.getBoundingClientRect();
-  const x = e.clientX - rect.left + gridEl.scrollLeft;
-  const y = e.clientY - rect.top + gridEl.scrollTop;
   return {
-    col: Math.max(0, Math.floor(x / cs)),
-    row: Math.max(0, Math.floor(y / cs)),
+    col: Math.max(0, Math.floor((e.clientX - rect.left + gridEl.scrollLeft) / cs)),
+    row: Math.max(0, Math.floor((e.clientY - rect.top  + gridEl.scrollTop)  / cs)),
   };
 }
 
@@ -94,8 +86,8 @@ function highlightDropTarget(gridEl, x, y, cs) {
   highlightEl = document.createElement('div');
   highlightEl.className = 'drop-highlight';
   highlightEl.style.left = x * cs + 'px';
-  highlightEl.style.top = y * cs + 'px';
-  highlightEl.style.width = cs + 'px';
+  highlightEl.style.top  = y * cs + 'px';
+  highlightEl.style.width  = cs + 'px';
   highlightEl.style.height = cs + 'px';
   gridEl.appendChild(highlightEl);
 }
@@ -108,25 +100,22 @@ function clearHighlight(gridEl) {
 }
 
 // --- タッチ DnD ---
-function initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove }) {
+function initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture }) {
   let touchDrag = null;
   let ghost = null;
 
   function createGhost(sourceEl) {
     ghost = sourceEl.cloneNode(true);
-    ghost.style.position = 'fixed';
-    ghost.style.opacity = '0.7';
-    ghost.style.pointerEvents = 'none';
-    ghost.style.zIndex = '9999';
-    ghost.style.width = sourceEl.offsetWidth + 'px';
+    ghost.style.cssText = 'position:fixed;opacity:0.7;pointer-events:none;z-index:9999;';
+    ghost.style.width  = sourceEl.offsetWidth  + 'px';
     ghost.style.height = sourceEl.offsetHeight + 'px';
     document.body.appendChild(ghost);
   }
 
   function moveGhost(x, y) {
     if (!ghost) return;
-    ghost.style.left = x - ghost.offsetWidth / 2 + 'px';
-    ghost.style.top = y - ghost.offsetHeight / 2 + 'px';
+    ghost.style.left = x - ghost.offsetWidth  / 2 + 'px';
+    ghost.style.top  = y - ghost.offsetHeight / 2 + 'px';
   }
 
   function removeGhost() {
@@ -136,7 +125,13 @@ function initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove }) {
   paletteEl.addEventListener('touchstart', e => {
     const item = e.target.closest('.palette-item');
     if (!item) return;
-    touchDrag = { mode: 'new', typeId: item.dataset.typeId };
+    if (item.dataset.typeId) {
+      touchDrag = { mode: 'new', typeId: item.dataset.typeId };
+    } else if (item.dataset.furnTypeId) {
+      touchDrag = { mode: 'furnNew', furnTypeId: item.dataset.furnTypeId };
+    } else {
+      return;
+    }
     createGhost(item);
   }, { passive: true });
 
@@ -164,9 +159,11 @@ function initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove }) {
       const rect = gridEl.getBoundingClientRect();
       const cs = cellSize();
       const col = Math.max(0, Math.floor((t.clientX - rect.left) / cs));
-      const row = Math.max(0, Math.floor((t.clientY - rect.top) / cs));
+      const row = Math.max(0, Math.floor((t.clientY - rect.top)  / cs));
       if (touchDrag.mode === 'new') {
         onDropNew(touchDrag.typeId, col, row);
+      } else if (touchDrag.mode === 'furnNew') {
+        onDropFurniture?.(touchDrag.furnTypeId, col, row);
       } else {
         onMove(touchDrag.roomId, col, row);
       }
