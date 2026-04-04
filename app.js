@@ -811,7 +811,8 @@ function handleModeChange(mode) {
   paintMode  = null;
   editingRoomId = null;
   renderPaintPreview();
-  if (mode !== 'stair') selectedStairId = null;
+  if (mode !== 'room') selectRoom(null);
+  if (mode !== 'stair') { selectedStairId = null; renderStairs(); }
   if (mode !== 'furniture') {
     selectedFurnitureId = null;
     renderFurniture();
@@ -911,8 +912,12 @@ function appendIrregularRoom(gridEl, room) {
       if (e.button !== 0) return;
       if (e.ctrlKey || e.metaKey) return;
       if (multiSelected.size > 0) return;
-      if (state.mode !== 'room') return;
       if (editingRoomId === room.id) return;
+      if (state.mode !== 'room') {
+        handleModeChange('room'); toolbar.setMode('room');
+        selectRoom(room.id);
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       selectRoom(room.id);
@@ -978,8 +983,13 @@ function renderStairs() {
 
     // ドラッグで移動
     div.addEventListener('mousedown', e => {
-      if (state.mode !== 'stair') return;
       e.stopPropagation();
+      if (state.mode !== 'stair') {
+        handleModeChange('stair'); toolbar.setMode('stair');
+        selectedStairId = s.id;
+        updateInspector(); renderStairs();
+        return;
+      }
       e.preventDefault();
       const rect   = gridEl.getBoundingClientRect();
       const origX  = s.x, origY = s.y;
@@ -1073,7 +1083,9 @@ function renderFurniture() {
       e.stopPropagation();
       if (e.ctrlKey || e.metaKey) { toggleMultiSelect(furn.id); return; }
       if (multiSelected.size > 0) { clearMultiSelected(); return; }
-      if (state.mode !== 'furniture') return;
+      if (state.mode !== 'furniture') {
+        handleModeChange('furniture'); toolbar.setMode('furniture');
+      }
       selectedFurnitureId = (selectedFurnitureId === furn.id) ? null : furn.id;
       renderFurniture();
       updateInspector();
