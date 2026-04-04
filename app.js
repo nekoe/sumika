@@ -1046,6 +1046,7 @@ function renderStairs() {
     div.addEventListener('mousedown', e => {
       e.stopPropagation();
       if (state.mode !== 'stair') {
+        if (editingRoomId) return;
         handleModeChange('stair'); toolbar.setMode('stair');
         selectedStairId = s.id;
         updateInspector(); renderStairs();
@@ -1145,6 +1146,7 @@ function renderFurniture() {
       if (e.ctrlKey || e.metaKey) { toggleMultiSelect(furn.id); return; }
       if (multiSelected.size > 0) { clearMultiSelected(); return; }
       if (state.mode !== 'furniture') {
+        if (editingRoomId) return;
         handleModeChange('furniture'); toolbar.setMode('furniture');
       }
       selectedFurnitureId = (selectedFurnitureId === furn.id) ? null : furn.id;
