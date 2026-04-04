@@ -1857,10 +1857,11 @@ function buildSVGString() {
   }
 
   // 部屋セル・ラベル・階段
-  const allFloorData = state.floors;
+  // エクスポートは現在のフロアのみ出力
+  const allFloorData = [state.floors[state.currentFloor]];
   for (let fi = 0; fi < allFloorData.length; fi++) {
     const fl = allFloorData[fi];
-    const opacity = fi === state.currentFloor ? 1 : 0.35;
+    const opacity = 1;
     for (const room of (fl.rooms || [])) {
       const type = getTypeById(room.typeId);
       const color = room.color || type.color;
