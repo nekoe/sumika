@@ -1897,11 +1897,14 @@ function buildSVGString() {
   // 家具（カレントフロア）
   for (const furn of (state.furniture || [])) {
     const ftype = getFurnitureTypeById(furn.typeId);
-    inner += `<rect x="${furn.x*cs}" y="${furn.y*cs}" width="${furn.w*cs}" height="${furn.h*cs}" fill="${ftype.color}" stroke="#cbd5e1" stroke-width="0.5" rx="2"/>`;
+    const furnColor = furn.color ?? ftype.color;
+    const furnIcon  = furn.icon  ?? ftype.icon;
+    const furnLabel = furn.label ?? ftype.label;
+    inner += `<rect x="${furn.x*cs}" y="${furn.y*cs}" width="${furn.w*cs}" height="${furn.h*cs}" fill="${furnColor}" stroke="#cbd5e1" stroke-width="0.5" rx="2"/>`;
     const fcx = (furn.x + furn.w / 2) * cs;
     const fcy = (furn.y + furn.h / 2) * cs;
-    inner += `<text x="${fcx}" y="${fcy - 4}" text-anchor="middle" font-size="14" font-family="sans-serif">${escSVG(ftype.icon)}</text>`;
-    inner += `<text x="${fcx}" y="${fcy + 11}" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#475569">${escSVG(ftype.label)}</text>`;
+    inner += `<text x="${fcx}" y="${fcy - 4}" text-anchor="middle" font-size="14" font-family="sans-serif">${escSVG(furnIcon)}</text>`;
+    inner += `<text x="${fcx}" y="${fcy + 11}" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#475569">${escSVG(furnLabel)}</text>`;
   }
 
   // 壁・ドア・窓レイヤー
