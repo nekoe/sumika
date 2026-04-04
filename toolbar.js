@@ -84,7 +84,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       <!-- 常時表示: 採光 -->
       <div class="tb-ctx tb-sun">
         <span class="tb-ctx-label" title="採光シミュレーション">☀️</span>
-        <label title="建物の向き（上が指定の方位）"><span id="compass-label">${compassLabel(state.compass ?? 0)}</span><input type="range" id="inp-compass" min="0" max="315" step="45" value="${state.compass ?? 0}" style="width:60px"></label>
+        <label title="建物の向き（上が指定の方位）"><span id="compass-label">${compassLabel(state.compass ?? 0)}</span><input type="range" id="inp-compass" min="0" max="359" step="1" value="${state.compass ?? 0}" style="width:80px"></label>
         <label title="太陽の時刻"><span id="sunhour-label">${sunHourLabel(state.sunHour ?? 12)}</span><input type="range" id="inp-sunhour" min="6" max="18" step="0.5" value="${state.sunHour ?? 12}" style="width:60px"></label>
       </div>
     </div>
@@ -239,8 +239,10 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
 }
 
 function compassLabel(deg) {
+  const d = ((deg % 360) + 360) % 360;
   const labels = ['北↑','北東↗','東→','南東↘','南↓','南西↙','西←','北西↖'];
-  return labels[Math.round(deg / 45) % 8];
+  const dir = labels[Math.round(d / 45) % 8];
+  return `${dir} ${d}°`;
 }
 function sunHourLabel(h) {
   const hh = Math.floor(h);

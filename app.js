@@ -1930,7 +1930,7 @@ function buildSVGString() {
   // コンパスインジケーター（グリッド左上）
   const compassDeg = state.compass ?? 0;
   const COMPASS_LABELS = ['北↑','北東↗','東→','南東↘','南↓','南西↙','西←','北西↖'];
-  const compassText = COMPASS_LABELS[Math.round(compassDeg / 45) % 8];
+  const compassText = `${COMPASS_LABELS[Math.round(compassDeg / 45) % 8]} ${compassDeg}°`;
   inner += `
     <g transform="translate(10,10)">
       <rect width="36" height="36" rx="18" fill="rgba(255,255,255,0.85)" stroke="#e2e8f0" stroke-width="1"/>
@@ -2221,7 +2221,7 @@ function renderCompassIndicator() {
   if (!ind) { ind = document.createElement('div'); ind.id = 'compass-indicator'; gridEl.appendChild(ind); }
   const deg = state.compass ?? 0;
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-  const label = dirs[Math.round(deg/45)%8];
+  const label = `${dirs[Math.round(deg/45)%8]} ${deg}°`;
   const hour = state.sunHour ?? 12;
   const hh = Math.floor(hour), mm = hour%1===0.5?'30':'00';
   ind.innerHTML = `
