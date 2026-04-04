@@ -89,8 +89,8 @@ function svgLine(parent, x1, y1, x2, y2, cls) {
 }
 
 function renderElement(svgEl, el, cs) {
-  if (el.type === 'wall')        renderWall(svgEl, el.col, el.row, el.dir, cs, el.color);
-  if (el.type === 'lowwall')     renderLowWall(svgEl, el.col, el.row, el.dir, cs, el.color);
+  if (el.type === 'wall')        renderWall(svgEl, el.col, el.row, el.dir, cs);
+  if (el.type === 'lowwall')     renderLowWall(svgEl, el.col, el.row, el.dir, cs);
   if (el.type === 'door')        renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false);
   if (el.type === 'window')      renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window');
   if (el.type === 'window_tall') renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window-tall');

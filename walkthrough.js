@@ -1002,8 +1002,9 @@ function addDoorGeometry(scene, doorMat, wallMat, dir, col, row, flip, wallSegs,
     new THREE.SphereGeometry(0.04, 8, 8),
     new THREE.MeshLambertMaterial({ color: 0xd4a820 })
   );
-  if (dir === 'h') knob.position.set((flip ? -1 : 1) * (CELL - FW*2 - 0.1), DOOR_H*0.45, 0.06);
-  else             knob.position.set(0.06, DOOR_H*0.45, (flip ? -1 : 1) * (CELL - FW*2 - 0.1));
+  const knobY = 0.95 - DOOR_H / 2; // 床から約0.95mの高さ
+  if (dir === 'h') knob.position.set((flip ? -1 : 1) * ((CELL - FW*2) / 2 - 0.1), knobY, 0.06);
+  else             knob.position.set(0.06, knobY, (flip ? -1 : 1) * ((CELL - FW*2) / 2 - 0.1));
   panel.add(knob);
   group.add(panel);
 
