@@ -1931,12 +1931,18 @@ function buildSVGString() {
   const compassDeg = state.compass ?? 0;
   const COMPASS_LABELS = ['北↑','北東↗','東→','南東↘','南↓','南西↙','西←','北西↖'];
   const compassText = `${COMPASS_LABELS[Math.round(compassDeg / 45) % 8]} ${compassDeg}°`;
+  // ci-rose: 44x44 円内に三角矢印(赤) + "N"文字を compass 回転
+  // 円中心=(22,22), 三角頂点=上寄り: top=(22,4) left=(15,36) right=(29,36)
   inner += `
-    <g transform="translate(10,10)">
-      <rect width="36" height="36" rx="18" fill="rgba(255,255,255,0.85)" stroke="#e2e8f0" stroke-width="1"/>
-      <text x="18" y="23" text-anchor="middle" font-size="18" font-family="sans-serif" transform="rotate(${compassDeg},18,18)">↑</text>
+    <g transform="translate(8,8)">
+      <rect width="44" height="44" rx="22" fill="rgba(255,255,255,0.85)" stroke="#e2e8f0" stroke-width="1"/>
+      <g transform="rotate(${compassDeg},22,22)">
+        <polygon points="22,5 15,37 22,31 29,37" fill="#ef4444" opacity="0.85"/>
+        <text x="22" y="16" text-anchor="middle" font-size="11" font-weight="700" font-family="sans-serif" fill="#ef4444">N</text>
+      </g>
       <title>方位: ${escSVG(compassText)}</title>
-    </g>`;
+    </g>
+    <text x="30" y="60" text-anchor="middle" font-size="9" font-family="sans-serif" fill="rgba(30,41,59,0.75)" font-weight="600">${escSVG(compassText)}</text>`;
 
   const defs = `
   <defs>
