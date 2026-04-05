@@ -1106,6 +1106,15 @@ body {
   color: var(--color-text-muted);
 }
 
+.land-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.land-actions button {
+  width: 100%;
+}
+
 .area-footer {
   display: flex;
   flex-direction: column;

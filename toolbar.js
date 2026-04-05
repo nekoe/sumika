@@ -1,6 +1,6 @@
 // ツールバーUI（2行コンパクトレイアウト）
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onRotate, onLandClear, onLandCopy, onLandPaste, onPrint, onExportSVG, onExportPNG }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onRotate, onPrint, onExportSVG, onExportPNG }) {
 
   container.innerHTML = `
     <!-- Row 1: メイン操作 -->
@@ -52,13 +52,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <label title="行数">行<input type="range" id="grid-rows" min="8" max="30" value="${state.gridRows}" step="1" style="width:70px"><b id="rows-val">${state.gridRows}</b></label>
         <label title="マスのピクセルサイズ">サイズ<input type="range" id="cell-size" min="30" max="80" value="${state.cellSize}" step="5" style="width:70px"><b id="size-val">${state.cellSize}px</b></label>
       </div>
-      <!-- 土地モード -->
-      <div id="ctx-land" class="tb-ctx" style="display:none">
-        <span class="tb-ctx-label">土地:</span>
-        <button id="btn-land-copy" title="土地形状をコピー">📋 コピー</button>
-        <button id="btn-land-paste" title="コピーした土地形状を貼り付け">📥 ペースト</button>
-        <button id="btn-land-clear" title="土地をクリア">🗑 クリア</button>
-      </div>
       <!-- 常時表示: 採光 -->
       <div class="tb-ctx tb-sun">
         <span class="tb-ctx-label" title="採光シミュレーション">☀️</span>
@@ -91,7 +84,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       container.querySelectorAll('.mode-btn[data-mode]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const mode = btn.dataset.mode;
-      _showCtx(mode);
       if (mode === 'element') {
         onModeChange(state.elementTool || 'wall');
       } else {
@@ -123,9 +115,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     if (confirm('間取りをリセットしますか？この操作は元に戻せません。')) onReset();
   });
   document.getElementById('btn-walkthrough').addEventListener('click', () => onWalkthrough?.());
-  document.getElementById('btn-land-copy').addEventListener('click', () => onLandCopy?.());
-  document.getElementById('btn-land-paste').addEventListener('click', () => onLandPaste?.());
-  document.getElementById('btn-land-clear').addEventListener('click', () => onLandClear?.());
 
   // ── 採光 ──────────────────────────────────────────────
   document.getElementById('inp-compass').addEventListener('input', e => {
@@ -145,10 +134,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); onRedo(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); onSave(); }
   });
-
-  function _showCtx(mode) {
-    document.getElementById('ctx-land').style.display  = mode === 'land' ? 'flex' : 'none';
-  }
 
   return {
     updateUndoRedo(canUndo, canRedo) {
@@ -175,7 +160,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       container.querySelectorAll('.mode-btn[data-mode]').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === mode || (b.dataset.mode === 'element' && isElement));
       });
-      _showCtx(isElement ? null : mode);
     },
     syncWallColor(color) {
       const el = document.getElementById('wall-color-pick');

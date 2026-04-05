@@ -15,12 +15,18 @@ let _renderAll      = null;
 let _renderFurniture = null;
 let _showToast       = null;
 let _handleModeChange = null;
+let _onLandCopy      = null;
+let _onLandPaste     = null;
+let _onLandClear     = null;
 
-export function initInspector({ renderAll, renderFurniture, showToast, handleModeChange }) {
-  _renderAll       = renderAll;
-  _renderFurniture = renderFurniture;
-  _showToast       = showToast;
+export function initInspector({ renderAll, renderFurniture, showToast, handleModeChange, onLandCopy, onLandPaste, onLandClear }) {
+  _renderAll        = renderAll;
+  _renderFurniture  = renderFurniture;
+  _showToast        = showToast;
   _handleModeChange = handleModeChange;
+  _onLandCopy       = onLandCopy;
+  _onLandPaste      = onLandPaste;
+  _onLandClear      = onLandClear;
 }
 
 export function updateInspector() {
@@ -136,7 +142,19 @@ function renderAreaSummary(panel) {
     <div class="inspector-empty">
       <p>${emptyMsg[0]}</p>
       <p class="hint">${emptyMsg[1]}</p>
-    </div>`;
+    </div>
+    ${state.mode === 'land' ? `
+    <div class="land-actions">
+      <button id="insp-land-copy"  title="土地形状をコピー">📋 コピー</button>
+      <button id="insp-land-paste" title="コピーした土地形状を貼り付け">📥 ペースト</button>
+      <button id="insp-land-clear" class="btn-danger" title="土地をクリア">🗑 クリア</button>
+    </div>` : ''}`;
+
+  if (state.mode === 'land') {
+    panel.querySelector('#insp-land-copy') ?.addEventListener('click', () => _onLandCopy?.());
+    panel.querySelector('#insp-land-paste')?.addEventListener('click', () => _onLandPaste?.());
+    panel.querySelector('#insp-land-clear')?.addEventListener('click', () => _onLandClear?.());
+  }
 }
 
 // ── 面積フッター（常時表示）────────────────────────────────────
