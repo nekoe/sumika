@@ -328,12 +328,11 @@ export function renderStairs() {
         onMove: mv => {
           const dx = Math.round((mv.clientX - startMX) / cs);
           const dy = Math.round((mv.clientY - startMY) / cs);
-          if (dx === 0 && dy === 0) return;
-          moved = true;
           const nx = Math.max(0, Math.min(state.gridCols - s.w, origX + dx));
           const ny = Math.max(0, Math.min(state.gridRows - s.h, origY + dy));
           div.style.left = `${nx * cs}px`;
           div.style.top  = `${ny * cs}px`;
+          if (dx !== 0 || dy !== 0) moved = true;
         },
         onUp: mv => {
           if (!moved) {
@@ -450,12 +449,11 @@ export function renderFurniture() {
         onMove: mv => {
           const dx = Math.round((mv.clientX - startMX) / cs);
           const dy = Math.round((mv.clientY - startMY) / cs);
-          if (dx === 0 && dy === 0) return;
-          moved = true;
           const nx = Math.max(0, Math.min(state.gridCols - furn.w, origX + dx));
           const ny = Math.max(0, Math.min(state.gridRows - furn.h, origY + dy));
           div.style.left = `${nx * cs}px`;
           div.style.top  = `${ny * cs}px`;
+          if (dx !== 0 || dy !== 0) moved = true;
         },
         onUp: mv => {
           if (!moved) return;
@@ -463,6 +461,8 @@ export function renderFurniture() {
           const dy = Math.round((mv.clientY - startMY) / cs);
           const nx = Math.max(0, Math.min(state.gridCols - furn.w, origX + dx));
           const ny = Math.max(0, Math.min(state.gridRows - furn.h, origY + dy));
+          div.style.left = `${nx * cs}px`;
+          div.style.top  = `${ny * cs}px`;
           if (nx !== origX || ny !== origY) {
             pushUndo();
             furn.x = nx; furn.y = ny;
