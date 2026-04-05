@@ -85,7 +85,7 @@ function startResizeTouch(e, roomEl, dir, getCellSize, onResize) {
   document.addEventListener('touchend', onEnd);
 }
 
-function calcResize(dir, x, y, w, h, dx, dy) {
+export function calcResize(dir, x, y, w, h, dx, dy) {
   let newX = x, newY = y, newW = w, newH = h;
 
   if (dir.includes('e')) newW = Math.max(1, w + dx);

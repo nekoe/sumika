@@ -1,5 +1,5 @@
 // land.js - 土地形状描画モジュール
-const CELL_M = 0.91;
+import { CELL_M } from './rooms.js';
 
 export function initLandLayer(gridEl) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

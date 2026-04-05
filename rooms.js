@@ -98,7 +98,6 @@ export function createIrregularRoomData(typeId, cells) {
     x, y, w, h,
     color: type.color,
     cells,
-    zones: [],
     isDoma: type.isDoma ?? false,
   };
 }
