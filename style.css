@@ -360,7 +360,9 @@ body {
   transition: opacity .15s;
 }
 .room-block.selected .resize-handle,
-.room-block:hover .resize-handle { opacity: 1; }
+.room-block:hover .resize-handle,
+.stair-block.stair-selected .resize-handle,
+.stair-block:hover .resize-handle { opacity: 1; }
 
 .resize-nw { top: -5px;  left: -5px;  }
 .resize-n  { top: -5px;  left: 50%; transform: translateX(-50%); }

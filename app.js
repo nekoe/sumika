@@ -1035,6 +1035,8 @@ function renderStairs() {
     const isSelected = s.id === selectedStairId;
     div.className = 'stair-block' + (isSelected ? ' stair-selected' : '') + (multiSelected.has(s.id) ? ' multi-selected' : '');
     div.dataset.id = s.id;
+    div.dataset.x = s.x; div.dataset.y = s.y;
+    div.dataset.w = s.w; div.dataset.h = s.h;
     div.style.cssText = `left:${s.x*cs}px;top:${s.y*cs}px;width:${s.w*cs}px;height:${s.h*cs}px;`;
     const paired = state.floors[otherFloorIdx].stairs.some(os => os.x === s.x && os.y === s.y);
     const arrow  = ARROWS[s.dir || 'n'];
@@ -1044,6 +1046,7 @@ function renderStairs() {
 
     // ドラッグで移動
     div.addEventListener('mousedown', e => {
+      if (e.target.closest('.resize-handle')) return;
       e.stopPropagation();
       if (state.mode !== 'stair') {
         if (editingRoomId) return;
@@ -1100,6 +1103,36 @@ function renderStairs() {
     });
 
     div.addEventListener('click', e => e.stopPropagation());
+
+    // リサイズ開始時に undo を記録
+    div.addEventListener('mousedown', e => {
+      if (e.target.closest('.resize-handle')) pushUndo();
+    });
+
+    // リサイズハンドル
+    attachResizeHandles(div, () => state.cellSize, (id, g) => {
+      const stair = state.stairs.find(st => st.id === id);
+      if (!stair) return;
+      const x = Math.max(0, g.x);
+      const y = Math.max(0, g.y);
+      const w = Math.max(1, Math.min(g.w, state.gridCols - x));
+      const h = Math.max(1, Math.min(g.h, state.gridRows - y));
+      stair.x = x; stair.y = y; stair.w = w; stair.h = h;
+      const otherFl = state.floors[state.currentFloor === 0 ? 1 : 0];
+      const pairId = stair.id.endsWith('_pair') ? stair.id.replace('_pair', '') : stair.id + '_pair';
+      const pairedStair = otherFl.stairs.find(os => os.id === pairId)
+                       || otherFl.stairs.find(os => os.x === x && os.y === y);
+      if (pairedStair) { pairedStair.x = x; pairedStair.y = y; pairedStair.w = w; pairedStair.h = h; }
+      const cs = state.cellSize;
+      const el = document.querySelector(`.stair-block[data-id="${id}"]`);
+      if (el) {
+        el.style.left   = `${x * cs}px`; el.style.top    = `${y * cs}px`;
+        el.style.width  = `${w * cs}px`; el.style.height = `${h * cs}px`;
+        el.dataset.x = x; el.dataset.y = y; el.dataset.w = w; el.dataset.h = h;
+      }
+      saveProject(state);
+    });
+
     gridEl.appendChild(div);
   }
 }
@@ -2091,8 +2124,6 @@ function renderStairInspector(panel, stair) {
       <span class="inspector-icon">🪜</span>
       <span class="inspector-title">階段</span>
     </div>
-    <div class="inspector-field"><label>幅（マス）</label><input type="number" id="si-w" value="${stair.w}" min="1" max="6"></div>
-    <div class="inspector-field"><label>奥行（マス）</label><input type="number" id="si-h" value="${stair.h}" min="1" max="8"></div>
     <div class="inspector-field">
       <label>向き（2F側）</label>
       <div class="dir-row">
@@ -2110,22 +2141,6 @@ function renderStairInspector(panel, stair) {
   const otherFloor    = state.floors[otherFloorIdx];
   const getPaired = () => otherFloor.stairs.find(s => s.x === stair.x && s.y === stair.y);
 
-  document.getElementById('si-w').addEventListener('change', e => {
-    pushUndo();
-    stair.w = Math.max(1, Math.min(6, +e.target.value));
-    const p = getPaired(); if (p) p.w = stair.w;
-    state.stairConfig.w = stair.w;
-    toolbar.syncStairConfig(state.stairConfig);
-    renderAll(); saveProject(state);
-  });
-  document.getElementById('si-h').addEventListener('change', e => {
-    pushUndo();
-    stair.h = Math.max(1, Math.min(8, +e.target.value));
-    const p = getPaired(); if (p) p.h = stair.h;
-    state.stairConfig.h = stair.h;
-    toolbar.syncStairConfig(state.stairConfig);
-    renderAll(); saveProject(state);
-  });
   panel.querySelectorAll('.dir-btn[data-dir]').forEach(btn => {
     btn.addEventListener('click', () => {
       pushUndo();
