@@ -385,6 +385,20 @@ function toColor(hex) {
 const DOMA_DROP = 0.15;  // 土間の床段差（m）
 
 function generateFloors(scene, rooms, baseY) {
+  // 全土間セルのセットを先に収集（隣接判定に使用）
+  const allDomaCells = new Set();
+  for (const r of rooms) {
+    const isDoma = r.isDoma ?? (r.typeId === 'doma' || r.typeId === 'genkan');
+    if (!isDoma) continue;
+    if (r.cells) {
+      for (const key of r.cells) allDomaCells.add(key);
+    } else {
+      for (let row = r.y; row < r.y + r.h; row++)
+        for (let col = r.x; col < r.x + r.w; col++)
+          allDomaCells.add(`${col},${row}`);
+    }
+  }
+
   for (const r of rooms) {
     if (r.typeId === 'void') continue;
     const isDoma = r.isDoma ?? (r.typeId === 'doma' || r.typeId === 'genkan');
@@ -399,8 +413,8 @@ function generateFloors(scene, rooms, baseY) {
         m.receiveShadow = true;
         scene.add(m);
       }
-      // 土間: セルの縁に段差側面を追加
-      if (isDoma) addDomaEdges(scene, r.cells, baseY);
+      // 土間: セルの縁に段差側面を追加（他の土間セルとの境界は除く）
+      if (isDoma) addDomaEdges(scene, r.cells, baseY, allDomaCells);
     } else {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w * CELL, r.h * CELL), mat);
       m.rotation.x = -Math.PI / 2;
@@ -415,7 +429,7 @@ function generateFloors(scene, rooms, baseY) {
 
 // 矩形土間の外周段差側面
 function addDomaRect(scene, rx, ry, rw, rh, baseY) {
-  const mat = new THREE.MeshLambertMaterial({ color: 0x8a8278 });
+  const mat = new THREE.MeshLambertMaterial({ color: 0x8a8278, side: THREE.DoubleSide });
   const y   = baseY - DOMA_DROP / 2;
   const x0  = rx * CELL, z0 = ry * CELL;
   const x1  = (rx + rw) * CELL, z1 = (ry + rh) * CELL;
@@ -436,13 +450,12 @@ function addDomaRect(scene, rx, ry, rw, rh, baseY) {
 }
 
 // 不定形土間の外縁段差側面
-function addDomaEdges(scene, cells, baseY) {
-  const mat  = new THREE.MeshLambertMaterial({ color: 0x8a8278 });
-  const set  = new Set(cells);
+function addDomaEdges(scene, cells, baseY, allDomaCells) {
+  const mat  = new THREE.MeshLambertMaterial({ color: 0x8a8278, side: THREE.DoubleSide });
   const y    = baseY - DOMA_DROP / 2;
   for (const key of cells) {
     const [col, row] = key.split(',').map(Number);
-    // 各セルの4辺を調べ、隣がなければ側面を追加
+    // 各セルの4辺を調べ、隣が土間でなければ段差側面を追加
     const edges = [
       { nx: col,   nz: row-1, x: (col+0.5)*CELL,  z: row*CELL,       w: CELL, rotY: 0 },
       { nx: col,   nz: row+1, x: (col+0.5)*CELL,  z: (row+1)*CELL,   w: CELL, rotY: Math.PI },
@@ -450,7 +463,7 @@ function addDomaEdges(scene, cells, baseY) {
       { nx: col+1, nz: row,   x: (col+1)*CELL,     z: (row+0.5)*CELL, w: CELL, rotY: Math.PI/2 },
     ];
     for (const e of edges) {
-      if (!set.has(`${e.nx},${e.nz}`)) {
+      if (!allDomaCells.has(`${e.nx},${e.nz}`)) {
         const m = new THREE.Mesh(new THREE.PlaneGeometry(e.w, DOMA_DROP), mat);
         m.rotation.y = e.rotY;
         m.position.set(e.x, y, e.z);
@@ -867,12 +880,6 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
 
   function addEdge(dir, col, row, nCol, nRow) {
     const el = elMap.get(`${dir}:${col}:${row}`);
-    // 隣接セルが占有済みの場合、明示的に配置された建具のみ描写する
-    if (occupied.has(`${nCol},${nRow}`) && !el) return;
-    const k = `E:${dir}:${col}:${row}`;
-    if (added.has(k)) return;
-    added.add(k);
-    const type = el?.type;
     // エッジに隣接する両セルを確認（エッジ座標は必ずしもセル座標と一致しない）
     const cellA = dir === 'h' ? `${col},${row-1}` : `${col-1},${row}`;
     const cellB = `${col},${row}`;
@@ -880,6 +887,18 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
     const neighKey = `${nCol},${nRow}`;
     // ownCell: このエッジを所有する部屋側のセル（neighKeyの逆側）
     const ownCell = (cellA === neighKey) ? cellB : cellA;
+    // 隣接セルが occupied の場合は通常壁不要。
+    // ただし void（吹き抜け）と非void の境界のみ壁が必要
+    // （土間↔通常は段差のみで壁は不要なので doma は対象外）
+    if (occupied.has(neighKey) && !el) {
+      const nIsVoid = voidCells.has(neighKey);
+      const ownIsVoid = voidCells.has(ownCell);
+      if (nIsVoid === ownIsVoid) return;
+    }
+    const k = `E:${dir}:${col}:${row}`;
+    if (added.has(k)) return;
+    added.add(k);
+    const type = el?.type;
     const wallY0 = (domaCells.has(cellA) || domaCells.has(cellB)) ? baseY - DOMA_DROP
                  : (belowVoidCells.has(neighKey) && lowerOccupied.has(ownCell)) ? baseY - FLOOR_H
                  : baseY;
