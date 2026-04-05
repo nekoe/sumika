@@ -1,7 +1,7 @@
 // app.js — オーケストレーター
 
 import { state, ui, AUTOSAVE_INTERVAL } from './state.js';
-import { createGrid, rebuildGrid, canPlace, canPlaceCells, placeRoomCells } from './grid.js';
+import { createGrid, rebuildGrid, canPlace, canPlaceCells, placeRoomCells, removeRoom } from './grid.js';
 import { renderPalette, createRoomData, getTypeById } from './rooms.js';
 import { initDnd } from './dnd.js';
 import { saveProject, loadProject, exportJSON, importJSON, resetProject } from './storage.js';
@@ -402,12 +402,39 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'a') { e.preventDefault(); selectAll(); return; }
-    if ((e.key === 'Delete' || e.key === 'Backspace') && ui.selectedFurnitureId && state.mode === 'furniture') {
-      pushUndo();
-      state.furniture = state.furniture.filter(f => f.id !== ui.selectedFurnitureId);
-      ui.selectedFurnitureId = null;
-      renderFurniture();
-      saveProject(state);
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (ui.selectedId && state.mode === 'room') {
+        pushUndo();
+        removeRoom(ui.grid, ui.selectedId);
+        state.rooms = state.rooms.filter(r => r.id !== ui.selectedId);
+        ui.selectedId = null;
+        renderAll();
+        saveProject(state);
+        return;
+      }
+      if (ui.selectedStairId && state.mode === 'stair') {
+        pushUndo();
+        const stair = state.stairs.find(s => s.id === ui.selectedStairId);
+        if (stair) {
+          const otherFloorIdx = state.currentFloor === 0 ? 1 : 0;
+          const otherFloor = state.floors[otherFloorIdx];
+          const paired = otherFloor.stairs.find(s => s.x === stair.x && s.y === stair.y);
+          state.stairs = state.stairs.filter(s => s.id !== stair.id);
+          if (paired) otherFloor.stairs = otherFloor.stairs.filter(s => s.id !== paired.id);
+        }
+        ui.selectedStairId = null;
+        renderAll();
+        saveProject(state);
+        return;
+      }
+      if (ui.selectedFurnitureId && state.mode === 'furniture') {
+        pushUndo();
+        state.furniture = state.furniture.filter(f => f.id !== ui.selectedFurnitureId);
+        ui.selectedFurnitureId = null;
+        renderFurniture();
+        saveProject(state);
+        return;
+      }
     }
     if (e.key === 'Escape' && state.mode === 'land' && !state.land?.closed) {
       state.land = { points: [], closed: false };

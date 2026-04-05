@@ -229,7 +229,8 @@ function renderFurnitureInspector(panel, furn) {
         <label class="inspector-label">色</label>
         <input id="furn-insp-color" type="color" value="${color}" style="width:44px;height:28px;padding:0;border:none;cursor:pointer">
       </div>
-    </div>`;
+    </div>
+    <button id="fi-delete" class="btn-danger btn-full" style="margin-top:8px">家具を削除</button>`;
 
   const commit = () => {
     const newLabel = panel.querySelector('#furn-insp-label')?.value.trim() || label;
@@ -250,6 +251,13 @@ function renderFurnitureInspector(panel, furn) {
     if (block) block.style.backgroundColor = e.target.value;
   });
   panel.querySelector('#furn-insp-color').addEventListener('change', commit);
+
+  document.getElementById('fi-delete').addEventListener('click', () => {
+    pushUndo();
+    state.furniture = (state.furniture || []).filter(f => f.id !== furn.id);
+    ui.selectedFurnitureId = null;
+    _renderFurniture?.(); _renderAll?.(); saveProject(state);
+  });
 }
 
 // ── 部屋 ──────────────────────────────────────────────────────
