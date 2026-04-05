@@ -25,7 +25,7 @@ export function initWallHandlers(svgEl, { getGridEl, updateInspector }) {
   });
 
   svgEl.addEventListener('mousemove', e => {
-    if (state.mode === 'room' || state.mode === 'stair') return;
+    if (state.mode === 'room' || state.mode === 'stair' || state.mode === 'furniture' || state.mode === 'land') return;
     ui.hoveredEdge = getEdgeAt(e, getGridEl(), state.cellSize);
     if (state.mode === 'eraser') {
       if (ui.eraserDragging) eraseAtEdge(ui.hoveredEdge, svgEl);
