@@ -901,6 +901,8 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
     const type = el?.type;
     const wallY0 = (domaCells.has(cellA) || domaCells.has(cellB)) ? baseY - DOMA_DROP
                  : (belowVoidCells.has(neighKey) && lowerOccupied.has(ownCell)) ? baseY - FLOOR_H
+                 // void セルが2F外部に接する場合: 1F天井（WALL_H）まで下げてスラブゾーンの隙間を埋める
+                 : (voidCells.has(ownCell) && !occupied.has(neighKey)) ? baseY - (FLOOR_H - WALL_H)
                  : baseY;
     const needsFullHeight = voidCells.has(cellA) || voidCells.has(cellB)
                           || aboveVoidCells.has(cellA) || aboveVoidCells.has(cellB);
