@@ -946,6 +946,8 @@ body {
    ============================================================ */
 .stair-block {
   position: absolute;
+  user-select: none;
+  -webkit-user-drag: none;
   background: repeating-linear-gradient(
     135deg,
     rgba(180,160,130,0.3) 0px, rgba(180,160,130,0.3) 4px,

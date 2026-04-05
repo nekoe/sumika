@@ -1,18 +1,6 @@
 // ツールバーUI（2行コンパクトレイアウト）
 
-const sc0 = { w: 2, h: 3, dir: 'n' };
-const DIRS = [
-  { id: 'n', label: '↑北', title: '北向き（上が出口）' },
-  { id: 's', label: '↓南', title: '南向き（下が出口）' },
-  { id: 'e', label: '→東', title: '東向き' },
-  { id: 'w', label: '←西', title: '西向き' },
-];
-
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onStairConfigChange, onRotate, onLandClear, onLandCopy, onLandPaste, onPrint, onExportSVG, onExportPNG }) {
-  const sc = state.stairConfig || sc0;
-  const dirBtns = DIRS.map(d =>
-    `<button class="dir-btn${sc.dir === d.id ? ' active' : ''}" data-dir="${d.id}" title="${d.title}">${d.label}</button>`
-  ).join('');
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onRotate, onLandClear, onLandCopy, onLandPaste, onPrint, onExportSVG, onExportPNG }) {
 
   container.innerHTML = `
     <!-- Row 1: メイン操作 -->
@@ -63,14 +51,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <label title="列数">列<input type="range" id="grid-cols" min="10" max="40" value="${state.gridCols}" step="1" style="width:70px"><b id="cols-val">${state.gridCols}</b></label>
         <label title="行数">行<input type="range" id="grid-rows" min="8" max="30" value="${state.gridRows}" step="1" style="width:70px"><b id="rows-val">${state.gridRows}</b></label>
         <label title="マスのピクセルサイズ">サイズ<input type="range" id="cell-size" min="30" max="80" value="${state.cellSize}" step="5" style="width:70px"><b id="size-val">${state.cellSize}px</b></label>
-      </div>
-      <!-- 階段モード: 形状・向き -->
-      <div id="ctx-stair" class="tb-ctx" style="display:none">
-        <span class="tb-ctx-label">階段:</span>
-        <label title="横幅（マス）">幅<input type="number" id="stair-w" min="1" max="6" value="${sc.w}" style="width:38px"></label>
-        <label title="奥行（マス）">奥行<input type="number" id="stair-h" min="1" max="8" value="${sc.h}" style="width:38px"></label>
-        <span class="tb-ctx-label">向き:</span>
-        ${dirBtns}
       </div>
       <!-- 土地モード -->
       <div id="ctx-land" class="tb-ctx" style="display:none">
@@ -132,24 +112,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   rowsInput.addEventListener('input', () => { document.getElementById('rows-val').textContent = rowsInput.value; fireGrid(); });
   sizeInput.addEventListener('input', () => { document.getElementById('size-val').textContent = sizeInput.value + 'px'; fireGrid(); });
 
-  // ── 階段設定 ──────────────────────────────────────────
-  document.getElementById('stair-w').addEventListener('change', e => {
-    state.stairConfig.w = Math.max(1, Math.min(6, +e.target.value));
-    onStairConfigChange?.(state.stairConfig);
-  });
-  document.getElementById('stair-h').addEventListener('change', e => {
-    state.stairConfig.h = Math.max(1, Math.min(8, +e.target.value));
-    onStairConfigChange?.(state.stairConfig);
-  });
-  container.querySelectorAll('.dir-btn[data-dir]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      container.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.stairConfig.dir = btn.dataset.dir;
-      onStairConfigChange?.(state.stairConfig);
-    });
-  });
-
   // ── ファイル操作 ──────────────────────────────────────
   document.getElementById('btn-save').addEventListener('click', onSave);
   document.getElementById('btn-print').addEventListener('click', () => onPrint?.());
@@ -187,9 +149,8 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   });
 
   function _showCtx(mode) {
-    document.getElementById('ctx-room').style.display  = mode === 'room'  ? 'flex' : 'none';
-    document.getElementById('ctx-stair').style.display = mode === 'stair' ? 'flex' : 'none';
-    document.getElementById('ctx-land').style.display  = mode === 'land'  ? 'flex' : 'none';
+    document.getElementById('ctx-room').style.display  = mode === 'room' ? 'flex' : 'none';
+    document.getElementById('ctx-land').style.display  = mode === 'land' ? 'flex' : 'none';
   }
 
   return {
@@ -211,13 +172,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     },
     syncFloor(fi) {
       container.querySelectorAll('.floor-btn').forEach(b => b.classList.toggle('active', +b.dataset.floor === fi));
-    },
-    syncStairConfig(sc) {
-      const wEl = document.getElementById('stair-w');
-      const hEl = document.getElementById('stair-h');
-      if (wEl) wEl.value = sc.w;
-      if (hEl) hEl.value = sc.h;
-      container.querySelectorAll('.dir-btn').forEach(b => b.classList.toggle('active', b.dataset.dir === sc.dir));
     },
     setMode(mode) {
       const isElement = mode !== 'room' && mode !== 'stair' && mode !== 'furniture' && mode !== 'land';

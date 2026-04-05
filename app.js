@@ -29,7 +29,7 @@ let state = {
   furnitureType: 'kitchen',
   compass: 0,
   sunHour: 12,
-  stairConfig: { w: 2, h: 3, dir: 'n' },
+  stairConfig: { w: 1, h: 3, dir: 'n' },
   land: { points: [], closed: false },
 };
 Object.defineProperty(state, 'rooms',     { get() { return this.floors[this.currentFloor].rooms;     }, set(v) { this.floors[this.currentFloor].rooms     = v; }, enumerable: false });
@@ -126,7 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
     onGridChange:        handleGridChange,
     onModeChange:        handleModeChange,
     onFloorChange:       handleFloorChange,
-    onStairConfigChange: cfg => { state.stairConfig = cfg; },
     onSave:              () => { saveProject(state); showToast('保存しました'); },
     onExport:            () => exportJSON(state),
     onImport:            file => importJSON(file, data => {
@@ -138,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderAll();
       toolbar.syncSliders(state);
       toolbar.syncFloor(state.currentFloor);
-      toolbar.syncStairConfig(state.stairConfig);
       toolbar.syncWallColor(state.wallColor);
       renderCompassIndicator();
       showToast('読み込みました');
@@ -197,26 +195,11 @@ document.addEventListener('DOMContentLoaded', () => {
     onDropNew:        handleDropNew,
     onMove:           handleMove,
     onDropFurniture:  handleFurnitureDropNew,
+    onDropStair:      handleStairDropNew,
   });
 
   // グリッドクリック
   document.getElementById('grid').addEventListener('click', e => {
-    if (state.mode === 'stair') {
-      const sb = e.target.closest('.stair-block');
-      if (sb) {
-        // 既存の階段をクリック → 選択
-        const id = sb.dataset.id;
-        selectedStairId = (selectedStairId === id) ? null : id;
-        updateInspector();
-        renderStairs();
-        return;
-      }
-      // 空きエリアをクリック → 配置
-      const { col, row } = getGridCell(e);
-      handleStairPlace(col, row);
-      return;
-    }
-
     if (state.mode !== 'room') return;
     if (!e.target.closest('.room-block') && !e.target.closest('.room-cell') && !e.target.closest('.stair-block') && !e.target.closest('.furniture-block')) {
       if (multiSelected.size > 0) { clearMultiSelected(); return; }
@@ -559,7 +542,6 @@ document.addEventListener('DOMContentLoaded', () => {
   toolbar.syncSliders(state);
   toolbar.updateUndoRedo(false, false);
   toolbar.syncFloor(state.currentFloor);
-  toolbar.syncStairConfig(state.stairConfig);
 
   setInterval(() => saveProject(state), AUTOSAVE_INTERVAL);
 });
@@ -837,6 +819,18 @@ function renderElementPalette() {
   });
 }
 
+function renderStairPalette() {
+  const paletteEl = document.getElementById('palette');
+  paletteEl.innerHTML = '<div class="palette-section-title">階段</div>';
+  const item = document.createElement('div');
+  item.className = 'palette-item';
+  item.draggable = true;
+  item.dataset.stairItem = '1';
+  item.style.background = 'rgba(240,232,220,0.8)';
+  item.innerHTML = `<span class="palette-icon">🪜</span><span class="palette-label">階段</span>`;
+  paletteEl.appendChild(item);
+}
+
 function renderFurniturePalette() {
   const paletteEl = document.getElementById('palette');
   paletteEl.innerHTML = '<div class="palette-section-title">家具</div>';
@@ -872,6 +866,8 @@ function handleModeChange(mode) {
   const isElement = ELEMENT_TOOLS.some(t => t.id === mode);
   if (mode === 'furniture') {
     renderFurniturePalette();
+  } else if (mode === 'stair') {
+    renderStairPalette();
   } else if (isElement) {
     renderElementPalette();
   } else {
@@ -1087,14 +1083,17 @@ function renderStairs() {
         const dy = Math.round((mv.clientY - startMY) / cs);
         const nx = Math.max(0, Math.min(state.gridCols - s.w, origX + dx));
         const ny = Math.max(0, Math.min(state.gridRows - s.h, origY + dy));
+        // 最終位置に確定（onMove が最終フレームを更新していない場合のために再セット）
+        div.style.left = `${nx * cs}px`;
+        div.style.top  = `${ny * cs}px`;
         if (nx !== origX || ny !== origY) {
           pushUndo();
           const otherFl = state.floors[state.currentFloor === 0 ? 1 : 0];
           const paired  = otherFl.stairs.find(os => os.x === s.x && os.y === s.y);
           s.x = nx; s.y = ny;
           if (paired) { paired.x = nx; paired.y = ny; }
+          div.dataset.x = nx; div.dataset.y = ny;
           selectedStairId = s.id;
-          renderAll();
           saveProject(state);
         }
       };
@@ -1103,6 +1102,7 @@ function renderStairs() {
     });
 
     div.addEventListener('click', e => e.stopPropagation());
+    div.addEventListener('dragstart', e => e.preventDefault());
 
     // リサイズ開始時に undo を記録
     div.addEventListener('mousedown', e => {
@@ -1252,6 +1252,28 @@ function renderFurniture() {
 
     gridEl.appendChild(div);
   }
+}
+
+function handleStairDropNew(col, row) {
+  const { w, h, dir } = state.stairConfig;
+  const x = Math.min(Math.max(0, col), state.gridCols - w);
+  const y = Math.min(Math.max(0, row), state.gridRows - h);
+  const otherFloorIdx = state.currentFloor === 0 ? 1 : 0;
+  const otherFloor    = state.floors[otherFloorIdx];
+  pushUndo();
+  const newStair = { id: `stair-${Date.now()}`, x, y, w, h, dir };
+  state.stairs.push(newStair);
+  selectedStairId = newStair.id;
+  const oi = otherFloor.stairs.findIndex(s => s.x === x && s.y === y);
+  if (oi !== -1) {
+    Object.assign(otherFloor.stairs[oi], { x, y, w, h, dir });
+  } else {
+    otherFloor.stairs.push({ id: `stair-${Date.now() + 1}`, x, y, w, h, dir, mirror: otherFloorIdx === 1 });
+  }
+  if (state.mode !== 'stair') { handleModeChange('stair'); toolbar.setMode('stair'); }
+  renderAll();
+  updateInspector();
+  saveProject(state);
 }
 
 function handleFurnitureDropNew(typeId, col, row) {
@@ -2146,8 +2168,6 @@ function renderStairInspector(panel, stair) {
       pushUndo();
       stair.dir = btn.dataset.dir;
       const p = getPaired(); if (p) p.dir = stair.dir;
-      state.stairConfig.dir = stair.dir;
-      toolbar.syncStairConfig(state.stairConfig);
       renderAll(); saveProject(state);
     });
   });
@@ -2268,14 +2288,14 @@ function undo() {
   redoStack.push(snapshotState()); restoreSnapshot(undoStack.pop());
   multiSelected = new Set();
   grid = createGrid(state.gridCols, state.gridRows); rebuildGrid(grid, state.rooms);
-  renderAll(); toolbar.syncSliders(state); toolbar.syncFloor(state.currentFloor); toolbar.syncStairConfig(state.stairConfig);
+  renderAll(); toolbar.syncSliders(state); toolbar.syncFloor(state.currentFloor);
 }
 function redo() {
   if (!redoStack.length) return;
   undoStack.push(snapshotState()); restoreSnapshot(redoStack.pop());
   multiSelected = new Set();
   grid = createGrid(state.gridCols, state.gridRows); rebuildGrid(grid, state.rooms);
-  renderAll(); toolbar.syncSliders(state); toolbar.syncFloor(state.currentFloor); toolbar.syncStairConfig(state.stairConfig);
+  renderAll(); toolbar.syncSliders(state); toolbar.syncFloor(state.currentFloor);
 }
 
 // ============================================================
