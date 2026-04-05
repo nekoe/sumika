@@ -1141,25 +1141,6 @@ body {
 .furniture-block.dragging { opacity: .5; }
 .furn-icon  { font-size: 18px; line-height: 1; pointer-events: none; }
 .furn-label { font-size: 10px; font-weight: 600; color: rgba(0,0,0,.7); pointer-events: none; white-space: nowrap; }
-.furn-delete {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 16px;
-  height: 16px;
-  background: #ef4444;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  font-size: 10px;
-  line-height: 16px;
-  text-align: center;
-  cursor: pointer;
-  display: none;
-  z-index: 30;
-  padding: 0;
-}
-.furniture-block.selected .furn-delete { display: block; }
 .furniture-block.selected .resize-handle,
 .furniture-block:hover .resize-handle { opacity: 1; }
 
@@ -1361,7 +1342,6 @@ body {
   body.printing #paint-canvas { display: none !important; }
 
   body.printing .resize-handle,
-  body.printing .furn-delete,
   body.printing .room-edit-btn,
   body.printing .drop-highlight { display: none !important; }
 }

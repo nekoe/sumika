@@ -410,18 +410,7 @@ export function renderFurniture() {
     div.style.cssText = `left:${furn.x*cs}px;top:${furn.y*cs}px;width:${furn.w*cs}px;height:${furn.h*cs}px;background-color:${displayColor};`;
     div.innerHTML = `
       <span class="furn-icon">${displayIcon}</span>
-      <span class="furn-label">${displayLabel}</span>
-      <button class="furn-delete" title="削除">×</button>`;
-
-    div.querySelector('.furn-delete').addEventListener('click', e => {
-      e.stopPropagation();
-      pushUndo();
-      state.furniture = state.furniture.filter(f => f.id !== furn.id);
-      ui.selectedFurnitureId = null;
-      renderFurniture();
-      updateInspector();
-      saveProject(state);
-    });
+      <span class="furn-label">${displayLabel}</span>`;
 
     div.addEventListener('click', e => {
       if (e.target.closest('.resize-handle')) return;
@@ -440,7 +429,6 @@ export function renderFurniture() {
     div.addEventListener('mousedown', e => {
       if (state.mode !== 'furniture') return;
       if (e.target.closest('.resize-handle')) { pushUndo(); return; }
-      if (e.target.closest('.furn-delete')) return;
       e.stopPropagation(); e.preventDefault();
       const origX = furn.x, origY = furn.y;
       const startMX = e.clientX, startMY = e.clientY;
