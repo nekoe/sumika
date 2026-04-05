@@ -976,7 +976,7 @@ body {
   padding: 1px 3px;
   border-radius: 3px;
 }
-#grid[data-mode="stair"] { cursor: crosshair; }
+#grid[data-mode="stair"] { cursor: default; }
 #grid[data-mode="stair"] .room-block { pointer-events: none; }
 
 /* ============================================================
