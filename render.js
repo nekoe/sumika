@@ -1,7 +1,7 @@
 // レンダリング: 部屋・階段・家具・グリッド・土地・コンパス
 
 import { state, ui } from './state.js';
-import { renderLand, calcLandArea } from './land.js';
+import { renderLand } from './land.js';
 import { renderWallLayer } from './walls.js';
 import { attachResizeHandles, calcResize } from './resize.js';
 import { getTypeById, calcAreaCells } from './rooms.js';
@@ -50,11 +50,6 @@ export function applyGridCss() {
 export function renderLandLayer() {
   if (!ui.landSvg) return;
   renderLand(ui.landSvg, state.land, state.cellSize, state.gridCols, state.gridRows, ui.landPreview);
-  if (state.land?.closed && state.land.points.length >= 3) {
-    ui.toolbar?.updateLandArea(calcLandArea(state.land.points));
-  } else {
-    ui.toolbar?.updateLandArea(0);
-  }
 }
 
 // ── コンパスインジケーター ──────────────────────────────────────

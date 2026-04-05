@@ -9,6 +9,7 @@ import { getFurnitureTypeById } from './furniture.js';
 import { selectAll, clearMultiSelected } from './selection.js';
 import { removeRoom } from './grid.js';
 import { escText } from './room-utils.js';
+import { calcLandArea } from './land.js';
 
 let _renderAll      = null;
 let _renderFurniture = null;
@@ -26,23 +27,24 @@ export function updateInspector() {
   const panel = document.getElementById('inspector');
   if (!panel) return;
 
-  if (ui.multiSelected.size >= 2) { renderMultiSelectInspector(panel); return; }
+  if (ui.multiSelected.size >= 2) { renderMultiSelectInspector(panel); _appendAreaFooter(panel); return; }
 
-  if (ELEMENT_TOOLS.some(t => t.id === state.mode)) { renderElementInspector(panel); return; }
+  if (ELEMENT_TOOLS.some(t => t.id === state.mode)) { renderElementInspector(panel); _appendAreaFooter(panel); return; }
 
   if (ui.selectedStairId && state.mode === 'stair') {
     const stair = state.stairs.find(s => s.id === ui.selectedStairId);
-    if (stair) { renderStairInspector(panel, stair); return; }
+    if (stair) { renderStairInspector(panel, stair); _appendAreaFooter(panel); return; }
   }
 
   if (ui.selectedFurnitureId && state.mode === 'furniture') {
     const furn = (state.furniture || []).find(f => f.id === ui.selectedFurnitureId);
-    if (furn) { renderFurnitureInspector(panel, furn); return; }
+    if (furn) { renderFurnitureInspector(panel, furn); _appendAreaFooter(panel); return; }
   }
 
   const room = state.rooms.find(r => r.id === ui.selectedId);
-  if (!room) { renderAreaSummary(panel); return; }
+  if (!room) { renderAreaSummary(panel); _appendAreaFooter(panel); return; }
   renderIrregularRoomInspector(panel, room);
+  _appendAreaFooter(panel);
 }
 
 // ── 複数選択 ──────────────────────────────────────────────────
@@ -121,6 +123,24 @@ function renderElementInspector(panel) {
 
 // ── 面積サマリー（何も選択していない時）──────────────────────
 function renderAreaSummary(panel) {
+  const emptyMsg = (() => {
+    const m = state.mode;
+    if (m === 'stair')     return ['階段をクリックして選択', 'パレットから階段をドラッグして配置'];
+    if (m === 'furniture') return ['家具をクリックして選択', 'パレットから家具をドラッグして配置'];
+    if (m === 'land')      return ['クリックで頂点追加', '始点クリックで閉じる / Escでキャンセル'];
+    if (ELEMENT_TOOLS.some(t => t.id === m)) return ['グリッド上の辺をクリックして配置', '消しゴムで建具を削除'];
+    return ['部屋をクリックして選択', 'パレットから部屋をドラッグして配置<br>選択後「✏️ セルを編集」で形を変更'];
+  })();
+
+  panel.innerHTML = `
+    <div class="inspector-empty">
+      <p>${emptyMsg[0]}</p>
+      <p class="hint">${emptyMsg[1]}</p>
+    </div>`;
+}
+
+// ── 面積フッター（常時表示）────────────────────────────────────
+function _appendAreaFooter(panel) {
   const rows = state.floors.map((fl, fi) => {
     const rooms = (fl.rooms || []).filter(r => r.typeId !== 'garage');
     const cellCount = rooms.reduce((s, r) => s + r.cells.length, 0);
@@ -130,12 +150,11 @@ function renderAreaSummary(panel) {
   });
   const totalTsubo = rows.reduce((s, r) => s + parseFloat(r.tsubo), 0).toFixed(2);
   const totalSqm   = rows.reduce((s, r) => s + parseFloat(r.sqm),   0).toFixed(1);
+  const landM2     = calcLandArea(state.land?.points ?? []);
 
-  panel.innerHTML = `
-    <div class="inspector-empty">
-      <p>部屋をクリックして選択</p>
-      <p class="hint">パレットから部屋をドラッグして配置<br>選択後「✏️ セルを編集」で形を変更</p>
-    </div>
+  const footer = document.createElement('div');
+  footer.className = 'area-footer';
+  footer.innerHTML = `
     <div class="area-summary">
       <div class="area-summary-title">間取り面積</div>
       ${rows.map(r => r.count > 0 ? `
@@ -152,7 +171,14 @@ function renderAreaSummary(panel) {
           <span class="area-val"><b>${totalTsubo}</b>坪</span>
           <span class="area-sqm">${totalSqm}㎡</span>
         </div>` : '<p class="hint">まだ部屋がありません</p>'}
+    </div>
+    <div class="area-summary">
+      <div class="area-summary-title">土地面積</div>
+      ${landM2 > 0
+        ? `<div class="area-row area-total"><span class="area-val"><b>${(landM2 / 3.305785).toFixed(1)}</b>坪</span><span class="area-sqm">${landM2.toFixed(1)}㎡</span></div>`
+        : '<p class="hint">土地未設定</p>'}
     </div>`;
+  panel.appendChild(footer);
 }
 
 // ── 階段 ──────────────────────────────────────────────────────
