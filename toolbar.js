@@ -45,8 +45,8 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
 
     <!-- Row 2: コンテキスト -->
     <div class="tb-context">
-      <!-- 部屋モード: グリッドサイズ -->
-      <div id="ctx-room" class="tb-ctx">
+      <!-- 常時表示: グリッドサイズ -->
+      <div class="tb-ctx">
         <span class="tb-ctx-label">グリッド:</span>
         <label title="列数">列<input type="range" id="grid-cols" min="10" max="40" value="${state.gridCols}" step="1" style="width:70px"><b id="cols-val">${state.gridCols}</b></label>
         <label title="行数">行<input type="range" id="grid-rows" min="8" max="30" value="${state.gridRows}" step="1" style="width:70px"><b id="rows-val">${state.gridRows}</b></label>
@@ -149,7 +149,6 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
   });
 
   function _showCtx(mode) {
-    document.getElementById('ctx-room').style.display  = mode === 'room' ? 'flex' : 'none';
     document.getElementById('ctx-land').style.display  = mode === 'land' ? 'flex' : 'none';
   }
 
