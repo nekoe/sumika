@@ -4,6 +4,7 @@ export const ELEMENT_TOOLS = [
   { id: 'wall',        label: '壁',        icon: '▬', color: '#1e293b' },
   { id: 'lowwall',     label: '腰壁',      icon: '▭', color: '#64748b' },
   { id: 'door',        label: 'ドア',      icon: '🚪', color: '#92400e' },
+  { id: 'slide_door',  label: '引き戸',    icon: '⬌', color: '#b45309' },
   { id: 'window',      label: '窓(標準)',  icon: '🪟', color: '#0ea5e9' },
   { id: 'window_tall', label: '掃き出し窓', icon: '🟦', color: '#0284c7' },
   { id: 'window_low',  label: '高窓',      icon: '🔲', color: '#7dd3fc' },
@@ -92,6 +93,7 @@ function renderElement(svgEl, el, cs) {
   if (el.type === 'wall')        renderWall(svgEl, el.col, el.row, el.dir, cs);
   if (el.type === 'lowwall')     renderLowWall(svgEl, el.col, el.row, el.dir, cs);
   if (el.type === 'door')        renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false);
+  if (el.type === 'slide_door')  renderSlideDoor(svgEl, el.col, el.row, el.dir, cs);
   if (el.type === 'window')      renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window');
   if (el.type === 'window_tall') renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window-tall');
   if (el.type === 'window_low')  renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window-low');
@@ -179,6 +181,54 @@ function renderDoor(svgEl, col, row, dir, cs, flip) {
   arc.setAttribute('class', 'el-door-arc');
   g.appendChild(panel);
   g.appendChild(arc);
+  svgEl.appendChild(g);
+}
+
+function renderSlideDoor(svgEl, col, row, dir, cs) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('class', 'el-slide-door');
+  const x = col * cs, y = row * cs;
+  const pw = cs * 0.6; // パネル幅（開口の60%）
+  const bk = cs * 0.12; // 枠の突き出し長さ
+
+  // ギャップ（白線でグリッド線を消す）
+  const gap = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  if (dir === 'h') {
+    gap.setAttribute('x1', x);    gap.setAttribute('y1', y);
+    gap.setAttribute('x2', x+cs); gap.setAttribute('y2', y);
+  } else {
+    gap.setAttribute('x1', x); gap.setAttribute('y1', y);
+    gap.setAttribute('x2', x); gap.setAttribute('y2', y+cs);
+  }
+  gap.setAttribute('class', 'el-door-gap');
+  g.appendChild(gap);
+
+  function mkLine(x1, y1, x2, y2, cls) {
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1);
+    l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+    if (cls) l.setAttribute('class', cls);
+    return l;
+  }
+
+  if (dir === 'h') {
+    // 両端枠（垂直方向の短い線）
+    g.appendChild(mkLine(x,    y - bk, x,    y + bk, 'el-slide-frame'));
+    g.appendChild(mkLine(x+cs, y - bk, x+cs, y + bk, 'el-slide-frame'));
+    // ドアパネル（左端から右へ pw 分）
+    g.appendChild(mkLine(x,    y - bk * 0.5, x + pw, y - bk * 0.5, 'el-slide-panel'));
+    g.appendChild(mkLine(x,    y + bk * 0.5, x + pw, y + bk * 0.5, 'el-slide-panel'));
+    g.appendChild(mkLine(x + pw, y - bk * 0.5, x + pw, y + bk * 0.5, 'el-slide-frame'));
+  } else {
+    // 両端枠（水平方向の短い線）
+    g.appendChild(mkLine(x - bk, y,    x + bk, y,    'el-slide-frame'));
+    g.appendChild(mkLine(x - bk, y+cs, x + bk, y+cs, 'el-slide-frame'));
+    // ドアパネル（上端から下へ pw 分）
+    g.appendChild(mkLine(x - bk * 0.5, y,    x - bk * 0.5, y + pw, 'el-slide-panel'));
+    g.appendChild(mkLine(x + bk * 0.5, y,    x + bk * 0.5, y + pw, 'el-slide-panel'));
+    g.appendChild(mkLine(x - bk * 0.5, y + pw, x + bk * 0.5, y + pw, 'el-slide-frame'));
+  }
+
   svgEl.appendChild(g);
 }
 

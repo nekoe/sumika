@@ -786,6 +786,17 @@ body {
   stroke-dasharray: 4 2;
   fill: none;
 }
+/* 引き戸 */
+.el-slide-frame {
+  stroke: #b45309;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.el-slide-panel {
+  stroke: #b45309;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
 /* 窓(標準) */
 .el-window line:nth-child(1),
 .el-window line:nth-child(3) {
