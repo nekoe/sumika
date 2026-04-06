@@ -15,7 +15,8 @@ export function saveProject(state) {
       sunHour:      state.sunHour     ?? 12,
       wallColor:    state.wallColor   ?? '#1e293b',
       stairConfig:  state.stairConfig ?? { w: 2, h: 3, dir: 'n' },
-      land:         state.land ?? { points: [], closed: false },
+      land:         state.land      ?? { points: [], closed: false },
+      landscape:    state.landscape ?? [],
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
@@ -72,7 +73,8 @@ export function exportJSON(state) {
     sunHour:      state.sunHour     ?? 12,
     wallColor:    state.wallColor   ?? '#1e293b',
     stairConfig:  state.stairConfig ?? { w: 2, h: 3, dir: 'n' },
-    land:         state.land ?? { points: [], closed: false },
+    land:         state.land      ?? { points: [], closed: false },
+    landscape:    state.landscape ?? [],
     exportedAt:   new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

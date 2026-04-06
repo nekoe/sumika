@@ -13,8 +13,9 @@ function snapshotState() {
     gridRows:     state.gridRows,
     cellSize:     state.cellSize,
     stairConfig:  state.stairConfig,
-    land:         state.land,       // Undo バグ修正: 土地も対象
-    wallColor:    state.wallColor,  // Undo バグ修正: 壁色も対象
+    land:         state.land,
+    landscape:    state.landscape,
+    wallColor:    state.wallColor,
     compass:      state.compass,
     sunHour:      state.sunHour,
   });
@@ -28,6 +29,7 @@ function restoreSnapshot(snap) {
   state.gridRows     = d.gridRows;
   state.cellSize     = d.cellSize;
   state.land         = d.land      ?? { points: [], closed: false };
+  state.landscape    = d.landscape ?? [];
   state.wallColor    = d.wallColor ?? '#1e293b';
   state.compass      = d.compass   ?? 0;
   state.sunHour      = d.sunHour   ?? 12;

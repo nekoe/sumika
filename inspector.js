@@ -6,6 +6,7 @@ import { saveProject } from './storage.js';
 import { ELEMENT_TOOLS, renderWallLayer } from './walls.js';
 import { getTypeById, calcAreaCells, CELL_M } from './rooms.js';
 import { getFurnitureTypeById } from './furniture.js';
+import { getLandscapeTypeById } from './landscape.js';
 import { selectAll, clearMultiSelected } from './selection.js';
 import { removeRoom } from './grid.js';
 import { escText } from './room-utils.js';
@@ -13,15 +14,17 @@ import { calcLandArea } from './land.js';
 
 let _renderAll      = null;
 let _renderFurniture = null;
+let _renderLandscape = null;
 let _showToast       = null;
 let _handleModeChange = null;
 let _onLandCopy      = null;
 let _onLandPaste     = null;
 let _onLandClear     = null;
 
-export function initInspector({ renderAll, renderFurniture, showToast, handleModeChange, onLandCopy, onLandPaste, onLandClear }) {
+export function initInspector({ renderAll, renderFurniture, renderLandscape, showToast, handleModeChange, onLandCopy, onLandPaste, onLandClear }) {
   _renderAll        = renderAll;
   _renderFurniture  = renderFurniture;
+  _renderLandscape  = renderLandscape;
   _showToast        = showToast;
   _handleModeChange = handleModeChange;
   _onLandCopy       = onLandCopy;
@@ -51,6 +54,11 @@ export function updateInspector() {
   if (ui.selectedFurnitureId && state.mode === 'furniture') {
     const furn = (state.furniture || []).find(f => f.id === ui.selectedFurnitureId);
     if (furn) { renderFurnitureInspector(panel, furn); _appendAreaFooter(panel); return; }
+  }
+
+  if (ui.selectedLandscapeId && state.mode === 'landscape') {
+    const ls = (state.landscape || []).find(l => l.id === ui.selectedLandscapeId);
+    if (ls) { renderLandscapeInspector(panel, ls); _appendAreaFooter(panel); return; }
   }
 
   const room = state.rooms.find(r => r.id === ui.selectedId);
@@ -187,6 +195,7 @@ function renderAreaSummary(panel) {
     if (m === 'stair')     return ['階段をクリックして選択', 'パレットから階段をドラッグして配置'];
     if (m === 'furniture') return ['家具をクリックして選択', 'パレットから家具をドラッグして配置'];
     if (m === 'land')      return ['クリックで頂点追加', '始点クリックで閉じる / Escでキャンセル'];
+    if (m === 'landscape') return ['外構ブロックをクリックして選択', 'パレットから外構・植栽をドラッグして配置'];
     if (ELEMENT_TOOLS.some(t => t.id === m)) return ['グリッド上の辺をクリックして配置', '消しゴムで建具を削除'];
     return ['部屋をクリックして選択', 'パレットから部屋をドラッグして配置<br>選択後「✏️ セルを編集」で形を変更'];
   })();
@@ -354,6 +363,63 @@ function renderFurnitureInspector(panel, furn) {
     state.furniture = (state.furniture || []).filter(f => f.id !== furn.id);
     ui.selectedFurnitureId = null;
     _renderFurniture?.(); _renderAll?.(); saveProject(state);
+  });
+}
+
+// ── 外構・植栽 ────────────────────────────────────────────────
+function renderLandscapeInspector(panel, ls) {
+  const ltype = getLandscapeTypeById(ls.typeId);
+  const label = ls.label ?? ltype.label;
+  const icon  = ls.icon  ?? ltype.icon;
+  const color = ls.color ?? ltype.color;
+
+  panel.innerHTML = `
+    <div class="inspector-header">
+      <span class="inspector-icon">${icon}</span>
+      <span class="inspector-title">${escText(label)}</span>
+    </div>
+    <div class="inspector-body">
+      <div class="inspector-row">
+        <label class="inspector-label">名前</label>
+        <input id="ls-insp-label" type="text" value="${escText(label)}" class="inspector-input" style="flex:1">
+      </div>
+      <div class="inspector-row">
+        <label class="inspector-label">アイコン</label>
+        <input id="ls-insp-icon" type="text" value="${escText(icon)}" class="inspector-input" style="width:60px;font-size:18px;text-align:center">
+      </div>
+      <div class="inspector-row">
+        <label class="inspector-label">色</label>
+        <input id="ls-insp-color" type="color" value="${color}" style="width:44px;height:28px;padding:0;border:none;cursor:pointer">
+      </div>
+    </div>
+    <button id="ls-delete" class="btn-danger btn-full" style="margin-top:8px">削除</button>`;
+
+  const commit = () => {
+    const newLabel = panel.querySelector('#ls-insp-label')?.value.trim() || label;
+    const newIcon  = panel.querySelector('#ls-insp-icon')?.value || icon;
+    const newColor = panel.querySelector('#ls-insp-color')?.value || color;
+    pushUndo();
+    ls.label = newLabel; ls.icon = newIcon; ls.color = newColor;
+    _renderLandscape?.();
+    renderLandscapeInspector(panel, ls);
+    _appendAreaFooter(panel);
+    saveProject(state);
+  };
+
+  panel.querySelector('#ls-insp-label').addEventListener('change', commit);
+  panel.querySelector('#ls-insp-icon').addEventListener('change', commit);
+  panel.querySelector('#ls-insp-color').addEventListener('input', e => {
+    ls.color = e.target.value;
+    const block = document.querySelector(`.landscape-block[data-id="${ls.id}"]`);
+    if (block) block.style.backgroundColor = e.target.value;
+  });
+  panel.querySelector('#ls-insp-color').addEventListener('change', commit);
+
+  document.getElementById('ls-delete').addEventListener('click', () => {
+    pushUndo();
+    state.landscape = (state.landscape || []).filter(l => l.id !== ls.id);
+    ui.selectedLandscapeId = null;
+    _renderLandscape?.(); _renderAll?.(); saveProject(state);
   });
 }
 

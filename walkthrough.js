@@ -1,5 +1,6 @@
 // walkthrough.js - 3Dウォークスルー（多フロア対応）
 import * as THREE from 'three';
+import { getLandscapeTypeById } from './landscape.js';
 
 const CELL       = 0.91;
 const EYE_H      = 1.6;
@@ -440,6 +441,9 @@ function buildScene(scene, floors, state) {
     }
   }
 
+  // 外構・植栽（地面レベル）
+  generateLandscapeItems(scene, state.landscape || []);
+
   return { floorData, stairAreas, sunLight: sun };
 }
 
@@ -819,6 +823,59 @@ function generateFurnitureItems(scene, furniture, baseY) {
       case 'washer':  genWasher(scene, x, z, fw, fd, baseY); break;
       case 'sink':    genSink(scene, x, z, fw, fd, baseY); break;
       case 'fridge':  genFridge(scene, x, z, fw, fd, baseY); break;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// 外構・植栽ジオメトリ生成
+// ─────────────────────────────────────────────────────────
+function generateLandscapeItems(scene, landscape) {
+  for (const ls of landscape) {
+    const ltype = getLandscapeTypeById(ls.typeId);
+    const color = ls.color ?? ltype.color;
+    const hexColor = parseInt(color.replace('#', ''), 16);
+    const cx = (ls.x + ls.w / 2) * CELL;
+    const cz = (ls.y + ls.h / 2) * CELL;
+    const w  = ls.w * CELL;
+    const d  = ls.h * CELL;
+
+    // 地面フラットパネル
+    const mat = new THREE.MeshLambertMaterial({ color: hexColor, emissive: hexColor, emissiveIntensity: 0.15 });
+    const geo = new THREE.BoxGeometry(w, 0.04, d);
+    const panel = new THREE.Mesh(geo, mat);
+    panel.position.set(cx, 0.02, cz);
+    scene.add(panel);
+
+    // 植栽・樹木は立体的に
+    if (ls.typeId === 'tree') {
+      // 幹
+      const trunkR = Math.min(w, d) * 0.08;
+      const trunkH = 1.2;
+      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x7c4a1e });
+      const trunkGeo = new THREE.CylinderGeometry(trunkR, trunkR * 1.3, trunkH, 8);
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.set(cx, trunkH / 2, cz);
+      scene.add(trunk);
+      // 葉
+      const leafR = Math.min(w, d) * 0.45 + 0.15;
+      const leafMat = new THREE.MeshLambertMaterial({ color: 0x3a9e44, emissive: 0x1e6b2a, emissiveIntensity: 0.2 });
+      const leafGeo = new THREE.SphereGeometry(leafR, 8, 6);
+      const leaves = new THREE.Mesh(leafGeo, leafMat);
+      leaves.position.set(cx, trunkH + leafR * 0.7, cz);
+      scene.add(leaves);
+    }
+
+    // 駐車場はライン追加
+    if (ls.typeId === 'parking') {
+      const lineMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xcccccc, emissiveIntensity: 0.3 });
+      const lineGeo = new THREE.BoxGeometry(w * 0.9, 0.05, 0.04);
+      const lineTop = new THREE.Mesh(lineGeo, lineMat);
+      lineTop.position.set(cx, 0.045, cz - d / 2 + 0.02);
+      scene.add(lineTop);
+      const lineBot = new THREE.Mesh(lineGeo, lineMat);
+      lineBot.position.set(cx, 0.045, cz + d / 2 - 0.02);
+      scene.add(lineBot);
     }
   }
 }

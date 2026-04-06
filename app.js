@@ -12,14 +12,15 @@ import { initLandLayer } from './land.js';
 import { pushUndo, undo, redo, canUndo, canRedo, resetUndoRedo } from './undo.js';
 import { initRotate, rotateFloorPlan } from './rotate.js';
 import { exportSVG, exportPNG, handlePrint } from './export.js';
-import { initRenderer, renderRooms, renderStairs, renderFurniture, renderLandLayer, renderPaintPreview, renderCompassIndicator, applyGridCss } from './render.js';
+import { initRenderer, renderRooms, renderStairs, renderFurniture, renderLandscape, renderLandLayer, renderPaintPreview, renderCompassIndicator, applyGridCss } from './render.js';
 import { initInspector, updateInspector } from './inspector.js';
 import { initSelection, selectRoom, selectAll, toggleMultiSelect, clearMultiSelected, startMultiMoveDrag } from './selection.js';
-import { initPaletteRenderer, renderElementPalette, renderStairPalette, renderFurniturePalette } from './palette-renderer.js';
+import { initPaletteRenderer, renderElementPalette, renderStairPalette, renderFurniturePalette, renderLandscapePalette } from './palette-renderer.js';
 import { initLandHandlers } from './land-handler.js';
 import { initWallHandlers } from './wall-handler.js';
 import { initCellEditHandlers } from './cell-edit-handler.js';
 import { getFurnitureTypeById } from './furniture.js';
+import { getLandscapeTypeById } from './landscape.js';
 import { normalizeCells, updateIrregularRoomBounds } from './room-utils.js';
 
 // ============================================================
@@ -41,6 +42,7 @@ function renderAll() {
   renderRooms();
   renderStairs();
   renderFurniture();
+  renderLandscape();
   renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, ui.selectedElementKey);
   renderLandLayer();
   updateInspector();
@@ -52,7 +54,7 @@ function renderAll() {
 // ============================================================
 function handleModeChange(mode) {
   state.mode = mode;
-  if (mode !== 'room' && mode !== 'stair' && mode !== 'furniture' && mode !== 'land') {
+  if (mode !== 'room' && mode !== 'stair' && mode !== 'furniture' && mode !== 'land' && mode !== 'landscape') {
     state.elementTool = mode;
   }
   ui.paintCells     = null;
@@ -62,13 +64,15 @@ function handleModeChange(mode) {
   if (mode !== 'room') selectRoom(null);
   if (mode !== 'stair') { ui.selectedStairId = null; renderStairs(); }
   if (mode !== 'furniture') { ui.selectedFurnitureId = null; renderFurniture(); }
+  if (mode !== 'landscape') { ui.selectedLandscapeId = null; renderLandscape(); }
   if (mode !== 'door') ui.selectedElementKey = null;
 
   const isElement = ELEMENT_TOOLS.some(t => t.id === mode);
-  if (mode === 'furniture')   renderFurniturePalette();
-  else if (mode === 'stair')  renderStairPalette();
-  else if (isElement)         renderElementPalette();
-  else                        renderPalette(document.getElementById('palette'));
+  if (mode === 'furniture')    renderFurniturePalette();
+  else if (mode === 'stair')   renderStairPalette();
+  else if (mode === 'landscape') renderLandscapePalette();
+  else if (isElement)          renderElementPalette();
+  else                         renderPalette(document.getElementById('palette'));
 
   document.getElementById('grid').dataset.mode = mode;
   document.getElementById('palette').style.pointerEvents = '';
@@ -112,7 +116,8 @@ function applyProjectData(data) {
     state.floors[0].rooms    = data.rooms    ?? [];
     state.floors[0].elements = data.elements ?? [];
   }
-  state.land = data.land ?? { points: [], closed: false };
+  state.land      = data.land      ?? { points: [], closed: false };
+  state.landscape = data.landscape ?? [];
   state.floors.forEach(f => f.rooms.forEach(r => normalizeCells(r)));
   syncStairsBetweenFloors();
 }
@@ -219,6 +224,20 @@ function handleFurnitureDropNew(typeId, col, row) {
   saveProject(state);
 }
 
+function handleLandscapeDropNew(typeId, col, row) {
+  const ltype = getLandscapeTypeById(typeId);
+  const x = Math.min(Math.max(0, col), state.gridCols - ltype.defaultW);
+  const y = Math.min(Math.max(0, row), state.gridRows - ltype.defaultH);
+  pushUndo();
+  const newLs = { id: `ls-${Date.now()}`, typeId: ltype.id, x, y, w: ltype.defaultW, h: ltype.defaultH };
+  state.landscape.push(newLs);
+  ui.selectedLandscapeId = newLs.id;
+  if (state.mode !== 'landscape') { handleModeChange('landscape'); ui.toolbar?.setMode('landscape'); }
+  renderLandscape();
+  updateInspector();
+  saveProject(state);
+}
+
 function handleGridChange({ gridCols, gridRows, cellSize }) {
   state.gridCols = gridCols; state.gridRows = gridRows; state.cellSize = cellSize;
   for (const fl of state.floors) {
@@ -235,6 +254,7 @@ function handleGridChange({ gridCols, gridRows, cellSize }) {
     fl.stairs    = fl.stairs.filter(s => s.x+s.w <= gridCols && s.y+s.h <= gridRows);
     if (fl.furniture) fl.furniture = fl.furniture.filter(f => f.x+f.w <= gridCols && f.y+f.h <= gridRows);
   }
+  state.landscape = state.landscape.filter(l => l.x+l.w <= gridCols && l.y+l.h <= gridRows);
   ui.grid = createGrid(gridCols, gridRows);
   rebuildGrid(ui.grid, state.rooms);
   renderAll();
@@ -291,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
       saveProject(state);
     },
   };
-  initInspector({ renderAll, renderFurniture, showToast, handleModeChange, ...landActions });
+  initInspector({ renderAll, renderFurniture, renderLandscape, showToast, handleModeChange, ...landActions });
   initPaletteRenderer({ handleModeChange });
   initRotate({ renderAll, syncSliders: s => ui.toolbar?.syncSliders(s) });
 
@@ -342,7 +362,9 @@ document.addEventListener('DOMContentLoaded', () => {
         { rooms: [], elements: [], stairs: [], furniture: [] },
       ];
       state.currentFloor = 0;
+      state.landscape = [];
       ui.multiSelected = new Set();
+      ui.selectedLandscapeId = null;
       resetProject();
       ui.grid = createGrid(state.gridCols, state.gridRows);
       rebuildGrid(ui.grid, state.rooms);
@@ -353,13 +375,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── DnD ─────────────────────────────────────────────────
   initDnd({
-    gridEl:          document.getElementById('grid'),
-    paletteEl:       document.getElementById('palette'),
-    cellSize:        () => state.cellSize,
-    onDropNew:       handleDropNew,
-    onMove:          () => {},
-    onDropFurniture: handleFurnitureDropNew,
-    onDropStair:     handleStairDropNew,
+    gridEl:           document.getElementById('grid'),
+    paletteEl:        document.getElementById('palette'),
+    cellSize:         () => state.cellSize,
+    onDropNew:        handleDropNew,
+    onMove:           () => {},
+    onDropFurniture:  handleFurnitureDropNew,
+    onDropStair:      handleStairDropNew,
+    onDropLandscape:  handleLandscapeDropNew,
   });
 
   // ── イベントハンドラ（各モジュールへ委譲）───────────────
@@ -445,6 +468,15 @@ document.addEventListener('DOMContentLoaded', () => {
         state.elements = state.elements.filter(el => `${el.dir}:${el.col}:${el.row}` !== key);
         ui.selectedElementKey = null;
         renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode, null);
+        updateInspector();
+        saveProject(state);
+        return;
+      }
+      if (ui.selectedLandscapeId && state.mode === 'landscape') {
+        pushUndo();
+        state.landscape = state.landscape.filter(l => l.id !== ui.selectedLandscapeId);
+        ui.selectedLandscapeId = null;
+        renderLandscape();
         updateInspector();
         saveProject(state);
         return;

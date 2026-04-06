@@ -3,6 +3,7 @@
 import { state, ui } from './state.js';
 import { getTypeById, calcAreaCells, CELL_M } from './rooms.js';
 import { getFurnitureTypeById } from './furniture.js';
+import { getLandscapeTypeById } from './landscape.js';
 import { escText } from './room-utils.js';
 
 export function buildSVGString() {
@@ -76,6 +77,19 @@ export function buildSVGString() {
     const scy = (s.y + s.h / 2) * cs;
     const arrow = DIRS_LABEL[s.dir || 'n'];
     inner += `<text x="${scx}" y="${scy + 5}" text-anchor="middle" font-size="14" font-family="sans-serif" fill="#475569">🪜${escText(arrow)}</text>`;
+  }
+
+  // 外構・植栽ブロック
+  for (const ls of (state.landscape || [])) {
+    const ltype = getLandscapeTypeById(ls.typeId);
+    const lsColor = ls.color ?? ltype.color;
+    const lsIcon  = ls.icon  ?? ltype.icon;
+    const lsLabel = ls.label ?? ltype.label;
+    inner += `<rect x="${ls.x*cs}" y="${ls.y*cs}" width="${ls.w*cs}" height="${ls.h*cs}" fill="${escText(lsColor)}" stroke="#94a3b8" stroke-width="0.5" rx="2" opacity="0.75"/>`;
+    const lcx = (ls.x + ls.w / 2) * cs;
+    const lcy = (ls.y + ls.h / 2) * cs;
+    inner += `<text x="${lcx}" y="${lcy - 4}" text-anchor="middle" font-size="14" font-family="sans-serif">${escText(lsIcon)}</text>`;
+    inner += `<text x="${lcx}" y="${lcy + 11}" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#475569">${escText(lsLabel)}</text>`;
   }
 
   // 家具（カレントフロア）

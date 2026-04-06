@@ -2,7 +2,7 @@
 
 let dragState = null;
 
-export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture, onDropStair }) {
+export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture, onDropStair, onDropLandscape }) {
   // --- パレット → グリッド（新規配置）---
   paletteEl.addEventListener('dragstart', e => {
     const item = e.target.closest('.palette-item');
@@ -13,6 +13,8 @@ export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDrop
       dragState = { mode: 'furnNew', furnTypeId: item.dataset.furnTypeId };
     } else if (item.dataset.stairItem) {
       dragState = { mode: 'stairNew' };
+    } else if (item.dataset.landscapeTypeId) {
+      dragState = { mode: 'landscapeNew', landscapeTypeId: item.dataset.landscapeTypeId };
     } else {
       return;
     }
@@ -66,6 +68,8 @@ export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDrop
       onDropFurniture?.(dragState.furnTypeId, col, row);
     } else if (dragState.mode === 'stairNew') {
       onDropStair?.(col, row);
+    } else if (dragState.mode === 'landscapeNew') {
+      onDropLandscape?.(dragState.landscapeTypeId, col, row);
     } else if (dragState.mode === 'move') {
       onMove(dragState.roomId, col - (dragState.offsetX || 0), row - (dragState.offsetY || 0));
     }
@@ -73,7 +77,7 @@ export function initDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDrop
   });
 
   // --- タッチ対応（モバイル）---
-  initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture, onDropStair });
+  initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture, onDropStair, onDropLandscape });
 }
 
 function getGridPos(e, gridEl, cs) {
@@ -104,7 +108,7 @@ function clearHighlight(gridEl) {
 }
 
 // --- タッチ DnD ---
-function initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture, onDropStair }) {
+function initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFurniture, onDropStair, onDropLandscape }) {
   let touchDrag = null;
   let ghost = null;
 
@@ -135,6 +139,8 @@ function initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFu
       touchDrag = { mode: 'furnNew', furnTypeId: item.dataset.furnTypeId };
     } else if (item.dataset.stairItem) {
       touchDrag = { mode: 'stairNew' };
+    } else if (item.dataset.landscapeTypeId) {
+      touchDrag = { mode: 'landscapeNew', landscapeTypeId: item.dataset.landscapeTypeId };
     } else {
       return;
     }
@@ -172,6 +178,8 @@ function initTouchDnd({ gridEl, paletteEl, cellSize, onDropNew, onMove, onDropFu
         onDropFurniture?.(touchDrag.furnTypeId, col, row);
       } else if (touchDrag.mode === 'stairNew') {
         onDropStair?.(col, row);
+      } else if (touchDrag.mode === 'landscapeNew') {
+        onDropLandscape?.(touchDrag.landscapeTypeId, col, row);
       } else {
         onMove(touchDrag.roomId, col, row);
       }

@@ -21,6 +21,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <button class="mode-btn" data-mode="element" title="壁・ドア・窓">🔨 建具</button>
         <button class="mode-btn" data-mode="furniture" title="家具配置">🪑 家具</button>
         <button class="mode-btn" data-mode="land" title="土地形状を描く">🏡 土地</button>
+        <button class="mode-btn" data-mode="landscape" title="外構・植栽ブロックを配置">🌿 外構</button>
       </div>
       <div class="tb-sep"></div>
       <div class="tb-group">
@@ -156,7 +157,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       container.querySelectorAll('.floor-btn').forEach(b => b.classList.toggle('active', +b.dataset.floor === fi));
     },
     setMode(mode) {
-      const isElement = mode !== 'room' && mode !== 'stair' && mode !== 'furniture' && mode !== 'land';
+      const isElement = mode !== 'room' && mode !== 'stair' && mode !== 'furniture' && mode !== 'land' && mode !== 'landscape';
       container.querySelectorAll('.mode-btn[data-mode]').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === mode || (b.dataset.mode === 'element' && isElement));
       });

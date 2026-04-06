@@ -6,6 +6,7 @@ import { renderWallLayer } from './walls.js';
 import { attachResizeHandles, calcResize } from './resize.js';
 import { getTypeById, calcAreaCells } from './rooms.js';
 import { getFurnitureTypeById } from './furniture.js';
+import { getLandscapeTypeById } from './landscape.js';
 import { pushUndo } from './undo.js';
 import { saveProject } from './storage.js';
 import { createDragHandler } from './drag.js';
@@ -466,6 +467,97 @@ export function renderFurniture() {
       const h = Math.max(ftype2.minH, Math.min(g.h, state.gridRows - y));
       f.x = x; f.y = y; f.w = w; f.h = h;
       const el = document.querySelector(`.furniture-block[data-id="${id}"]`);
+      if (el) {
+        el.style.left  = `${x*cs}px`; el.style.top    = `${y*cs}px`;
+        el.style.width = `${w*cs}px`; el.style.height = `${h*cs}px`;
+        el.dataset.x = x; el.dataset.y = y; el.dataset.w = w; el.dataset.h = h;
+      }
+      saveProject(state);
+    });
+
+    gridEl.appendChild(div);
+  }
+}
+
+// ── 外構・植栽 ────────────────────────────────────────────────
+export function renderLandscape() {
+  const gridEl = document.getElementById('grid');
+  gridEl.querySelectorAll('.landscape-block').forEach(el => el.remove());
+  const cs = state.cellSize;
+
+  for (const ls of (state.landscape || [])) {
+    const ltype = getLandscapeTypeById(ls.typeId);
+    const displayColor = ls.color ?? ltype.color;
+    const displayIcon  = ls.icon  ?? ltype.icon;
+    const displayLabel = ls.label ?? ltype.label;
+    const div = document.createElement('div');
+    const isSelected = ls.id === ui.selectedLandscapeId;
+    div.className = 'landscape-block' + (isSelected ? ' selected' : '');
+    div.dataset.id = ls.id;
+    div.dataset.x  = ls.x; div.dataset.y = ls.y;
+    div.dataset.w  = ls.w; div.dataset.h = ls.h;
+    div.style.cssText = `left:${ls.x*cs}px;top:${ls.y*cs}px;width:${ls.w*cs}px;height:${ls.h*cs}px;background-color:${displayColor};`;
+    div.innerHTML = `
+      <span class="landscape-icon">${displayIcon}</span>
+      <span class="landscape-label">${displayLabel}</span>`;
+
+    div.addEventListener('click', e => {
+      if (e.target.closest('.resize-handle')) return;
+      e.stopPropagation();
+      if (state.mode !== 'landscape') {
+        if (ui.editingRoomId) return;
+        _handleModeChange?.('landscape'); ui.toolbar?.setMode('landscape');
+      }
+      ui.selectedLandscapeId = (ui.selectedLandscapeId === ls.id) ? null : ls.id;
+      renderLandscape();
+      updateInspector();
+    });
+
+    div.addEventListener('mousedown', e => {
+      if (state.mode !== 'landscape') return;
+      if (e.target.closest('.resize-handle')) { pushUndo(); return; }
+      e.stopPropagation(); e.preventDefault();
+      const origX = ls.x, origY = ls.y;
+      const startMX = e.clientX, startMY = e.clientY;
+      let moved = false;
+      createDragHandler({
+        onMove: mv => {
+          const dx = Math.round((mv.clientX - startMX) / cs);
+          const dy = Math.round((mv.clientY - startMY) / cs);
+          const nx = Math.max(0, Math.min(state.gridCols - ls.w, origX + dx));
+          const ny = Math.max(0, Math.min(state.gridRows - ls.h, origY + dy));
+          div.style.left = `${nx * cs}px`;
+          div.style.top  = `${ny * cs}px`;
+          if (dx !== 0 || dy !== 0) moved = true;
+        },
+        onUp: mv => {
+          if (!moved) return;
+          const dx = Math.round((mv.clientX - startMX) / cs);
+          const dy = Math.round((mv.clientY - startMY) / cs);
+          const nx = Math.max(0, Math.min(state.gridCols - ls.w, origX + dx));
+          const ny = Math.max(0, Math.min(state.gridRows - ls.h, origY + dy));
+          if (nx !== origX || ny !== origY) {
+            pushUndo();
+            ls.x = nx; ls.y = ny;
+            div.dataset.x = nx; div.dataset.y = ny;
+            div.style.left = `${nx * cs}px`;
+            div.style.top  = `${ny * cs}px`;
+            saveProject(state);
+          }
+        },
+      });
+    });
+
+    attachResizeHandles(div, () => state.cellSize, (id, g) => {
+      const l = state.landscape.find(l => l.id === id);
+      if (!l) return;
+      const ltype2 = getLandscapeTypeById(l.typeId);
+      const x = Math.max(0, g.x);
+      const y = Math.max(0, g.y);
+      const w = Math.max(ltype2.minW, Math.min(g.w, state.gridCols - x));
+      const h = Math.max(ltype2.minH, Math.min(g.h, state.gridRows - y));
+      l.x = x; l.y = y; l.w = w; l.h = h;
+      const el = document.querySelector(`.landscape-block[data-id="${id}"]`);
       if (el) {
         el.style.left  = `${x*cs}px`; el.style.top    = `${y*cs}px`;
         el.style.width = `${w*cs}px`; el.style.height = `${h*cs}px`;

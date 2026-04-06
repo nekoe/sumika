@@ -3,6 +3,7 @@
 import { state, ui } from './state.js';
 import { ELEMENT_TOOLS, renderWallLayer } from './walls.js';
 import { FURNITURE_TYPES } from './furniture.js';
+import { LANDSCAPE_TYPES } from './landscape.js';
 import { saveProject } from './storage.js';
 
 let _handleModeChange = null;
@@ -59,6 +60,20 @@ export function renderFurniturePalette() {
     item.dataset.furnTypeId = ftype.id;
     item.style.background = ftype.color;
     item.innerHTML = `<span class="palette-icon">${ftype.icon}</span><span class="palette-label">${ftype.label}</span>`;
+    paletteEl.appendChild(item);
+  }
+}
+
+export function renderLandscapePalette() {
+  const paletteEl = document.getElementById('palette');
+  paletteEl.innerHTML = '<div class="palette-section-title">外構・植栽</div>';
+  for (const ltype of LANDSCAPE_TYPES) {
+    const item = document.createElement('div');
+    item.className = 'palette-item';
+    item.draggable = true;
+    item.dataset.landscapeTypeId = ltype.id;
+    item.style.background = ltype.color;
+    item.innerHTML = `<span class="palette-icon">${ltype.icon}</span><span class="palette-label">${ltype.label}</span>`;
     paletteEl.appendChild(item);
   }
 }

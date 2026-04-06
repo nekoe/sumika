@@ -19,7 +19,8 @@ export const state = {
   compass: 0,
   sunHour: 12,
   stairConfig: { w: 2, h: 3, dir: 'n' },
-  land: { points: [], closed: false },
+  land:      { points: [], closed: false },
+  landscape: [],
 };
 
 // 仮想プロパティ：currentFloor に基づいて floors[] を参照
@@ -64,4 +65,6 @@ export const ui = {
   hoveredEdge: null,
   eraserDragging: false,
   selectedElementKey: null,
+  // 外構
+  selectedLandscapeId: null,
 };
