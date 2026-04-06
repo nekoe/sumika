@@ -501,22 +501,21 @@ export function renderLandscape() {
       <span class="landscape-icon">${displayIcon}</span>
       <span class="landscape-label">${displayLabel}</span>`;
 
-    div.addEventListener('click', e => {
-      if (e.target.closest('.resize-handle')) return;
+    // 階段と同じパターン: mousedown で常に stopPropagation し、モード切替も mousedown 内で処理
+    div.addEventListener('mousedown', e => {
+      if (e.target.closest('.resize-handle')) { pushUndo(); return; }
       e.stopPropagation();
+      // landscape モード以外 → モード切替 + 選択して終了
       if (state.mode !== 'landscape') {
         if (ui.editingRoomId) return;
         _handleModeChange?.('landscape'); ui.toolbar?.setMode('landscape');
+        ui.selectedLandscapeId = ls.id;
+        renderLandscape();
+        updateInspector();
+        return;
       }
-      ui.selectedLandscapeId = (ui.selectedLandscapeId === ls.id) ? null : ls.id;
-      renderLandscape();
-      updateInspector();
-    });
-
-    div.addEventListener('mousedown', e => {
-      if (state.mode !== 'landscape') return;
-      if (e.target.closest('.resize-handle')) { pushUndo(); return; }
-      e.stopPropagation(); e.preventDefault();
+      // landscape モード内 → ドラッグ移動、onUp で選択トグル
+      e.preventDefault();
       const origX = ls.x, origY = ls.y;
       const startMX = e.clientX, startMY = e.clientY;
       let moved = false;
@@ -531,7 +530,12 @@ export function renderLandscape() {
           if (dx !== 0 || dy !== 0) moved = true;
         },
         onUp: mv => {
-          if (!moved) return;
+          if (!moved) {
+            ui.selectedLandscapeId = (ui.selectedLandscapeId === ls.id) ? null : ls.id;
+            renderLandscape();
+            updateInspector();
+            return;
+          }
           const dx = Math.round((mv.clientX - startMX) / cs);
           const dy = Math.round((mv.clientY - startMY) / cs);
           const nx = Math.max(0, Math.min(state.gridCols - ls.w, origX + dx));
@@ -547,6 +551,7 @@ export function renderLandscape() {
         },
       });
     });
+    div.addEventListener('click', e => e.stopPropagation());
 
     attachResizeHandles(div, () => state.cellSize, (id, g) => {
       const l = state.landscape.find(l => l.id === id);

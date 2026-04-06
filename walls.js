@@ -58,7 +58,7 @@ export function renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mo
   svgEl.innerHTML = '';
   svgEl.setAttribute('width', cols * cs);
   svgEl.setAttribute('height', rows * cs);
-  const passThrough = mode === 'room' || mode === 'stair' || mode === 'furniture';
+  const passThrough = mode === 'room' || mode === 'stair' || mode === 'furniture' || mode === 'landscape';
   svgEl.style.pointerEvents = passThrough ? 'none' : 'all';
   svgEl.style.cursor = passThrough ? 'default' : 'crosshair';
 
