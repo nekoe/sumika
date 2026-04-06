@@ -910,6 +910,8 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
     const eMat = getElWallMat(el);
     if (type === 'door') {
       addDoorGeometry(scene, doorMat, eMat, dir, col, row, el?.flip || false, wallSegs, doorMap, wallY0, wallTop);
+    } else if (type === 'slide_door') {
+      addSlideDoorGeometry(scene, doorMat, eMat, dir, col, row, wallSegs, doorMap, wallY0, wallTop);
     } else if (type === 'window') {
       addWallSeg(scene, eMat,     dir, col, row, wallY0,            wallY0 + WIN_LOW);
       addWallSeg(scene, glassMat, dir, col, row, wallY0 + WIN_LOW,  wallY0 + WIN_HIGH);
@@ -1035,6 +1037,56 @@ function addDoorGeometry(scene, doorMat, wallMat, dir, col, row, flip, wallSegs,
   doorMap.set(key, { seg, group, dir, flip, angle: 0, target: 0 });
 }
 
+function addSlideDoorGeometry(scene, doorMat, wallMat, dir, col, row, wallSegs, doorMap, baseY, wallTop) {
+  const x = col * CELL, z = row * CELL;
+  if (wallTop === undefined) wallTop = baseY + WALL_H;
+  const topH = wallTop - baseY - DOOR_H;
+
+  if (topH > 0.02) addWallSeg(scene, wallMat, dir, col, row, baseY + DOOR_H, wallTop);
+
+  // 枠（両端の縦桟）
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0xe0d0b8 });
+  const FW = 0.05;
+  if (dir === 'h') {
+    [x, x + CELL - FW].forEach(fx => {
+      const fm = new THREE.Mesh(new THREE.BoxGeometry(FW, DOOR_H, WALL_T + 0.02), frameMat);
+      fm.position.set(fx + FW/2, baseY + DOOR_H/2, z);
+      scene.add(fm);
+    });
+  } else {
+    [z, z + CELL - FW].forEach(fz => {
+      const fm = new THREE.Mesh(new THREE.BoxGeometry(WALL_T + 0.02, DOOR_H, FW), frameMat);
+      fm.position.set(x, baseY + DOOR_H/2, fz + FW/2);
+      scene.add(fm);
+    });
+  }
+
+  // スライドパネル（Groupを平行移動してアニメーション）
+  const group = new THREE.Group();
+  group.position.set(x, baseY, z);
+  scene.add(group);
+
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      dir === 'h' ? CELL - FW * 2 : 0.04,
+      DOOR_H - 0.02,
+      dir === 'h' ? 0.04 : CELL - FW * 2
+    ),
+    doorMat
+  );
+  panel.position.set(
+    dir === 'h' ? CELL / 2 : 0,
+    DOOR_H / 2,
+    dir === 'h' ? 0 : CELL / 2
+  );
+  group.add(panel);
+
+  const seg = { dir, col, row, open: false, isDoor: true };
+  wallSegs.push(seg);
+  const key = `${dir}:${col}:${row}`;
+  doorMap.set(key, { seg, group, dir, flip: false, slide: 0, slideTarget: 0, isSlide: true });
+}
+
 // ─────────────────────────────────────────────────────────
 // ドア開閉アニメーション
 // ─────────────────────────────────────────────────────────
@@ -1043,14 +1095,28 @@ function updateDoors(doorMap, camPos, wallSegs) {
     const wx = door.dir === 'h' ? (door.seg.col + 0.5) * CELL : door.seg.col * CELL;
     const wz = door.dir === 'h' ? door.seg.row * CELL          : (door.seg.row + 0.5) * CELL;
     const dist = Math.sqrt((camPos.x-wx)**2 + (camPos.z-wz)**2);
-    door.target = dist < DOOR_DIST ? 88 : 0;
-    const speed = 180;
-    if (door.angle < door.target) door.angle = Math.min(door.target, door.angle + speed * 0.016);
-    if (door.angle > door.target) door.angle = Math.max(door.target, door.angle - speed * 0.016);
-    const rad = door.angle * Math.PI / 180;
-    if (door.dir === 'h') door.group.rotation.y = (door.flip ? 1 : -1) * rad;
-    else                  door.group.rotation.y = (door.flip ? -1 : 1) * rad;
-    door.seg.open = door.angle > 45;
+
+    if (door.isSlide) {
+      // 引き戸: 平行移動でスライド
+      door.slideTarget = dist < DOOR_DIST ? CELL * 0.85 : 0;
+      const speed = 2.5;
+      if (door.slide < door.slideTarget) door.slide = Math.min(door.slideTarget, door.slide + speed * 0.016);
+      if (door.slide > door.slideTarget) door.slide = Math.max(door.slideTarget, door.slide - speed * 0.016);
+      // groupのベース位置は(col*CELL, baseY, row*CELL)なのでスライド量をオフセットとして加算
+      if (door.dir === 'h') door.group.position.x = door.seg.col * CELL + door.slide;
+      else                  door.group.position.z = door.seg.row * CELL + door.slide;
+      door.seg.open = door.slide > CELL * 0.4;
+    } else {
+      // 開き戸: 回転
+      door.target = dist < DOOR_DIST ? 88 : 0;
+      const speed = 180;
+      if (door.angle < door.target) door.angle = Math.min(door.target, door.angle + speed * 0.016);
+      if (door.angle > door.target) door.angle = Math.max(door.target, door.angle - speed * 0.016);
+      const rad = door.angle * Math.PI / 180;
+      if (door.dir === 'h') door.group.rotation.y = (door.flip ? 1 : -1) * rad;
+      else                  door.group.rotation.y = (door.flip ? -1 : 1) * rad;
+      door.seg.open = door.angle > 45;
+    }
   }
 }
 
