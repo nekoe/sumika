@@ -499,6 +499,64 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // ── ズーム（Ctrl+ホイール / ピンチ）────────────────────────
+  const ZOOM_MIN = 24, ZOOM_MAX = 96, ZOOM_STEP = 4;
+  const canvasWrapper = document.getElementById('canvas-wrapper');
+
+  function applyZoom(newSize, pivotX, pivotY) {
+    const oldSize = state.cellSize;
+    newSize = Math.round(newSize / ZOOM_STEP) * ZOOM_STEP;
+    newSize = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newSize));
+    if (newSize === oldSize) return;
+
+    // ピボット点周辺のスクロール位置を維持
+    const ratio = newSize / oldSize;
+    const scrollLeft = canvasWrapper.scrollLeft;
+    const scrollTop  = canvasWrapper.scrollTop;
+    const wrapRect   = canvasWrapper.getBoundingClientRect();
+    // ピボットのcanvasWrapper内座標（スクロール込み）
+    const px = (pivotX - wrapRect.left) + scrollLeft;
+    const py = (pivotY - wrapRect.top)  + scrollTop;
+
+    state.cellSize = newSize;
+    renderAll();
+    ui.toolbar.syncSliders(state);
+
+    // スクロール補正: ピボット点が画面上の同じ位置に来るよう調整
+    canvasWrapper.scrollLeft = px * ratio - (pivotX - wrapRect.left);
+    canvasWrapper.scrollTop  = py * ratio - (pivotY - wrapRect.top);
+
+    saveProject(state);
+  }
+
+  // Ctrl+ホイール
+  canvasWrapper.addEventListener('wheel', e => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    applyZoom(state.cellSize + delta, e.clientX, e.clientY);
+  }, { passive: false });
+
+  // ピンチ（タッチ）
+  let pinchDist0 = null, pinchSize0 = null, pinchMidX = 0, pinchMidY = 0;
+  canvasWrapper.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const t0 = e.touches[0], t1 = e.touches[1];
+      pinchDist0 = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      pinchSize0 = state.cellSize;
+      pinchMidX  = (t0.clientX + t1.clientX) / 2;
+      pinchMidY  = (t0.clientY + t1.clientY) / 2;
+    }
+  }, { passive: true });
+  canvasWrapper.addEventListener('touchmove', e => {
+    if (e.touches.length !== 2 || pinchDist0 === null) return;
+    e.preventDefault();
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    applyZoom(pinchSize0 * (dist / pinchDist0), pinchMidX, pinchMidY);
+  }, { passive: false });
+  canvasWrapper.addEventListener('touchend', () => { pinchDist0 = null; });
+
   // ── 初期レンダリング ─────────────────────────────────────
   renderAll();
   renderLandLayer();
