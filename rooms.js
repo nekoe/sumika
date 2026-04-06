@@ -17,7 +17,6 @@ export const ROOM_TYPES = [
   { id: 'doma',     label: '土間',       defaultW: 2, defaultH: 2, color: '#D6D0C8', icon: '👟', isDoma: true },
   { id: 'corridor', label: '廊下',       defaultW: 1, defaultH: 4, color: '#F5F5F5', icon: '➡️' },
   { id: 'storage',  label: '納戸/WIC',   defaultW: 2, defaultH: 2, color: '#EFEBE9', icon: '📦' },
-  { id: 'garage',   label: '駐車場',     defaultW: 3, defaultH: 4, color: '#ECEFF1', icon: '🚗' },
   { id: 'balcony',  label: 'バルコニー', defaultW: 4, defaultH: 2, color: '#F1F8E9', icon: '🌿' },
   { id: 'void',     label: '吹き抜け',   defaultW: 4, defaultH: 4, color: '#dbeafe', icon: '⬜', isVoid: true },
   { id: 'custom',   label: 'カスタム',   defaultW: 3, defaultH: 3, color: '#FFFFFF', icon: '✏️' },
