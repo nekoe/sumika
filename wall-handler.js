@@ -29,21 +29,40 @@ export function initWallHandlers(svgEl, { getGridEl, updateInspector }) {
     ui.hoveredEdge = getEdgeAt(e, getGridEl(), state.cellSize);
     if (state.mode === 'eraser') {
       if (ui.eraserDragging) eraseAtEdge(ui.hoveredEdge, svgEl);
-      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
+      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode, ui.selectedElementKey);
       return;
     }
-    renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode);
+    renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, ui.selectedElementKey);
   });
 
   svgEl.addEventListener('mouseleave', () => {
     ui.hoveredEdge = null;
-    renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
+    renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode, ui.selectedElementKey);
   });
 
   svgEl.addEventListener('click', e => {
     if (state.mode === 'room' || state.mode === 'stair' || state.mode === 'eraser') return;
     const edge = getEdgeAt(e, getGridEl(), state.cellSize);
-    if (!edge) return;
+    if (!edge) {
+      // 空白エリアクリック → 選択解除
+      if (ui.selectedElementKey) {
+        ui.selectedElementKey = null;
+        renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, null);
+        updateInspector();
+      }
+      return;
+    }
+    const key = edgeKey(edge.col, edge.row, edge.dir);
+    const existing = state.elements.find(el => edgeKey(el.col, el.row, el.dir) === key);
+    // 既存ドアを同じツールでクリック → 選択/選択解除
+    if (existing && existing.type === 'door' && state.mode === 'door') {
+      ui.selectedElementKey = ui.selectedElementKey === key ? null : key;
+      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, ui.selectedElementKey);
+      updateInspector();
+      return;
+    }
+    // その他は通常の配置/消去/置換
+    ui.selectedElementKey = null;
     handleElementClick(edge, svgEl);
   });
 
@@ -57,7 +76,7 @@ export function initWallHandlers(svgEl, { getGridEl, updateInspector }) {
     if (el) {
       pushUndo();
       el.flip = !el.flip;
-      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode);
+      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, ui.selectedElementKey);
       saveProject(state);
     }
   });
@@ -68,8 +87,9 @@ function eraseAtEdge(edge, svgEl) {
   const key = edgeKey(edge.col, edge.row, edge.dir);
   const idx = state.elements.findIndex(el => edgeKey(el.col, el.row, el.dir) === key);
   if (idx === -1) return;
+  if (ui.selectedElementKey === key) ui.selectedElementKey = null;
   state.elements.splice(idx, 1);
-  renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
+  renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode, ui.selectedElementKey);
   updateInspector();
 }
 
@@ -84,7 +104,7 @@ function handleElementClick(edge, svgEl) {
   } else {
     state.elements.push({ id: key, type: state.mode, col: edge.col, row: edge.row, dir: edge.dir, color: state.wallColor });
   }
-  renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode);
+  renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, ui.selectedElementKey);
   updateInspector();
   saveProject(state);
 }

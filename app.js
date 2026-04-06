@@ -41,7 +41,7 @@ function renderAll() {
   renderRooms();
   renderStairs();
   renderFurniture();
-  renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode);
+  renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, ui.selectedElementKey);
   renderLandLayer();
   updateInspector();
   ui.toolbar?.updateUndoRedo(canUndo(), canRedo());
@@ -62,6 +62,7 @@ function handleModeChange(mode) {
   if (mode !== 'room') selectRoom(null);
   if (mode !== 'stair') { ui.selectedStairId = null; renderStairs(); }
   if (mode !== 'furniture') { ui.selectedFurnitureId = null; renderFurniture(); }
+  if (mode !== 'door') ui.selectedElementKey = null;
 
   const isElement = ELEMENT_TOOLS.some(t => t.id === mode);
   if (mode === 'furniture')   renderFurniturePalette();
@@ -72,7 +73,7 @@ function handleModeChange(mode) {
   document.getElementById('grid').dataset.mode = mode;
   document.getElementById('palette').style.pointerEvents = '';
   if (mode !== 'stair') {
-    renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode);
+    renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode, ui.selectedElementKey);
   }
   // 土地ドラッグ状態リセット
   ui.landPreview = null;
@@ -435,6 +436,16 @@ document.addEventListener('DOMContentLoaded', () => {
         state.furniture = state.furniture.filter(f => f.id !== ui.selectedFurnitureId);
         ui.selectedFurnitureId = null;
         renderFurniture();
+        saveProject(state);
+        return;
+      }
+      if (ui.selectedElementKey && state.mode === 'door') {
+        pushUndo();
+        const key = ui.selectedElementKey;
+        state.elements = state.elements.filter(el => `${el.dir}:${el.col}:${el.row}` !== key);
+        ui.selectedElementKey = null;
+        renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, null, state.mode, null);
+        updateInspector();
         saveProject(state);
         return;
       }

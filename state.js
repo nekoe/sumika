@@ -63,4 +63,5 @@ export const ui = {
   // 建具
   hoveredEdge: null,
   eraserDragging: false,
+  selectedElementKey: null,
 };

@@ -54,7 +54,7 @@ function pixelToEdge(px, py, cs) {
 }
 
 // SVGに全要素をレンダリング
-export function renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mode) {
+export function renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mode, selectedKey) {
   svgEl.innerHTML = '';
   svgEl.setAttribute('width', cols * cs);
   svgEl.setAttribute('height', rows * cs);
@@ -63,7 +63,8 @@ export function renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mo
   svgEl.style.cursor = passThrough ? 'default' : 'crosshair';
 
   for (const el of elements) {
-    renderElement(svgEl, el, cs);
+    const isSelected = selectedKey && edgeKey(el.col, el.row, el.dir) === selectedKey;
+    renderElement(svgEl, el, cs, isSelected);
   }
 
   if (hoveredEdge && mode !== 'room') {
@@ -89,10 +90,10 @@ function svgLine(parent, x1, y1, x2, y2, cls) {
   return el;
 }
 
-function renderElement(svgEl, el, cs) {
+function renderElement(svgEl, el, cs, isSelected) {
   if (el.type === 'wall')        renderWall(svgEl, el.col, el.row, el.dir, cs);
   if (el.type === 'lowwall')     renderLowWall(svgEl, el.col, el.row, el.dir, cs);
-  if (el.type === 'door')        renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false);
+  if (el.type === 'door')        renderDoor(svgEl, el.col, el.row, el.dir, cs, el.flip || false, isSelected);
   if (el.type === 'slide_door')  renderSlideDoor(svgEl, el.col, el.row, el.dir, cs);
   if (el.type === 'window')      renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window');
   if (el.type === 'window_tall') renderWindow(svgEl, el.col, el.row, el.dir, cs, 'el-window-tall');
@@ -129,9 +130,9 @@ function renderLowWall(svgEl, col, row, dir, cs, color) {
   svgEl.appendChild(g);
 }
 
-function renderDoor(svgEl, col, row, dir, cs, flip) {
+function renderDoor(svgEl, col, row, dir, cs, flip, isSelected) {
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  g.setAttribute('class', 'el-door');
+  g.setAttribute('class', isSelected ? 'el-door el-door-selected' : 'el-door');
   const x = col * cs, y = row * cs;
 
   // ギャップ（白線でグリッド線を消す）

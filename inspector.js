@@ -35,7 +35,13 @@ export function updateInspector() {
 
   if (ui.multiSelected.size >= 2) { renderMultiSelectInspector(panel); _appendAreaFooter(panel); return; }
 
-  if (ELEMENT_TOOLS.some(t => t.id === state.mode)) { renderElementInspector(panel); _appendAreaFooter(panel); return; }
+  if (ELEMENT_TOOLS.some(t => t.id === state.mode)) {
+    if (ui.selectedElementKey && state.mode === 'door') {
+      const el = state.elements.find(e => `${e.dir}:${e.col}:${e.row}` === ui.selectedElementKey);
+      if (el) { renderDoorInspector(panel, el); _appendAreaFooter(panel); return; }
+    }
+    renderElementInspector(panel); _appendAreaFooter(panel); return;
+  }
 
   if (ui.selectedStairId && state.mode === 'stair') {
     const stair = state.stairs.find(s => s.id === ui.selectedStairId);
@@ -75,6 +81,53 @@ function renderMultiSelectInspector(panel) {
   `;
   document.getElementById('btn-multi-all').addEventListener('click', selectAll);
   document.getElementById('btn-multi-clear').addEventListener('click', clearMultiSelected);
+}
+
+// ── ドア（選択中）──────────────────────────────────────────────
+function renderDoorInspector(panel, el) {
+  const isH = el.dir === 'h';
+  const flip = el.flip || false;
+  const labelA = isH ? '左' : '上';
+  const labelB = isH ? '右' : '下';
+
+  panel.innerHTML = `
+    <div class="inspector-header">
+      <span class="inspector-icon">🚪</span>
+      <span class="inspector-title">ドア（選択中）</span>
+    </div>
+    <div class="inspector-row">
+      <label class="inspector-label">蝶番</label>
+      <div class="door-flip-btns">
+        <button class="door-flip-btn ${!flip ? 'active' : ''}" data-flip="false">${labelA}</button>
+        <button class="door-flip-btn ${flip  ? 'active' : ''}" data-flip="true">${labelB}</button>
+      </div>
+    </div>
+    <button id="btn-del-this-door" class="btn-danger btn-full" style="margin-top:10px">🗑️ このドアを削除</button>
+  `;
+
+  panel.querySelectorAll('.door-flip-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newFlip = btn.dataset.flip === 'true';
+      if (el.flip === newFlip) return;
+      pushUndo();
+      el.flip = newFlip;
+      renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, ui.selectedElementKey);
+      saveProject(state);
+      renderDoorInspector(panel, el);
+      _appendAreaFooter(panel);
+    });
+  });
+
+  document.getElementById('btn-del-this-door')?.addEventListener('click', () => {
+    pushUndo();
+    const key = ui.selectedElementKey;
+    state.elements = state.elements.filter(e => `${e.dir}:${e.col}:${e.row}` !== key);
+    ui.selectedElementKey = null;
+    renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, null);
+    saveProject(state);
+    renderElementInspector(panel);
+    _appendAreaFooter(panel);
+  });
 }
 
 // ── 建具 ──────────────────────────────────────────────────────
