@@ -68,6 +68,7 @@ export function startWalkthrough(state) {
 
   // ── 外観モード用オービット状態 ────────────────────────
   let isExterior   = false;
+  let savedInteriorPos = null; // 外観モード前の内部視点位置を保存
   let orbitTheta   = -Math.PI * 0.35; // 水平角
   let orbitPhi     = 0.45;            // 仰角
   let orbitDragging = false;
@@ -281,6 +282,8 @@ export function startWalkthrough(state) {
     const btn  = document.getElementById('wt-view-toggle');
     const hint = document.getElementById('wt-hint');
     if (isExterior) {
+      // 内部→外観: 現在の内部視点位置を保存してからオービットへ
+      savedInteriorPos = camera.position.clone();
       document.exitPointerLock();
       isLocked = false;
       btn.textContent = '🚶 内部';
@@ -289,11 +292,21 @@ export function startWalkthrough(state) {
       camera.far = 150;
       camera.updateProjectionMatrix();
     } else {
+      // 外観→内部: 保存した内部視点位置に復元（なければ最初の部屋の位置）
       btn.textContent = '🏗️ 外観';
       scene.fog = new THREE.Fog(0x87ceeb, 18, 50);
       camera.far = 60;
       camera.updateProjectionMatrix();
-      camera.position.set(camera.position.x, currentFloor3D * FLOOR_H + EYE_H, camera.position.z);
+      if (savedInteriorPos) {
+        camera.position.copy(savedInteriorPos);
+      } else {
+        const startRoom = floors[currentFloor3D].rooms[0];
+        camera.position.set(
+          (startRoom.x + startRoom.w / 2) * CELL,
+          currentFloor3D * FLOOR_H + EYE_H,
+          (startRoom.y + startRoom.h / 2) * CELL
+        );
+      }
       camera.rotation.set(pitch, yaw, 0, 'YXZ');
       hint.style.display = 'flex';
     }
