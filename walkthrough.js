@@ -866,17 +866,77 @@ function generateLandscapeItems(scene, landscape) {
       scene.add(leaves);
     }
 
-    // 駐車場はライン追加
+    // 駐車場 → カーポート（柱 + 屋根）
     if (ls.typeId === 'parking') {
-      const lineMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xcccccc, emissiveIntensity: 0.3 });
-      const lineGeo = new THREE.BoxGeometry(w * 0.9, 0.05, 0.04);
-      const lineTop = new THREE.Mesh(lineGeo, lineMat);
-      lineTop.position.set(cx, 0.045, cz - d / 2 + 0.02);
-      scene.add(lineTop);
-      const lineBot = new THREE.Mesh(lineGeo, lineMat);
-      lineBot.position.set(cx, 0.045, cz + d / 2 - 0.02);
-      scene.add(lineBot);
+      genCarport(scene, cx, cz, w, d);
     }
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// カーポート（駐車場の3D構造物）
+// ─────────────────────────────────────────────────────────
+function genCarport(scene, cx, cz, w, d) {
+  const pillarH  = 2.3;   // 柱・屋根高さ（m）
+  const roofT    = 0.10;  // 屋根パネル厚さ
+  const overhang = 0.10;  // 屋根の出幅
+  const pillarSz = 0.09;  // 柱断面（正方形）
+  const inset    = 0.12;  // 柱の端からの距離
+
+  // ── 停車ライン（地面）─────────────────────────────────
+  const lineMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xcccccc, emissiveIntensity: 0.3 });
+  for (const dz of [-d / 2 + 0.02, d / 2 - 0.02]) {
+    const lineGeo = new THREE.BoxGeometry(w * 0.92, 0.05, 0.04);
+    const line = new THREE.Mesh(lineGeo, lineMat);
+    line.position.set(cx, 0.045, cz + dz);
+    scene.add(line);
+  }
+
+  // ── 柱（4隅）────────────────────────────────────────
+  const pillarMat = new THREE.MeshLambertMaterial({ color: 0x686e72, emissive: 0x303030, emissiveIntensity: 0.2 });
+  const corners = [
+    [cx - w / 2 + inset, cz - d / 2 + inset],
+    [cx + w / 2 - inset, cz - d / 2 + inset],
+    [cx - w / 2 + inset, cz + d / 2 - inset],
+    [cx + w / 2 - inset, cz + d / 2 - inset],
+  ];
+  for (const [px, pz] of corners) {
+    const pillarGeo = new THREE.BoxGeometry(pillarSz, pillarH, pillarSz);
+    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+    pillar.position.set(px, pillarH / 2, pz);
+    scene.add(pillar);
+  }
+
+  // ── 屋根パネル（ポリカーボネート風：半透明ブルー）────
+  const roofW = w + overhang * 2;
+  const roofD = d + overhang * 2;
+  const roofMat = new THREE.MeshLambertMaterial({
+    color: 0xb8d8ee,
+    emissive: 0x5888aa,
+    emissiveIntensity: 0.2,
+    transparent: true,
+    opacity: 0.72,
+  });
+  const roofGeo = new THREE.BoxGeometry(roofW, roofT, roofD);
+  const roof = new THREE.Mesh(roofGeo, roofMat);
+  roof.position.set(cx, pillarH + roofT / 2, cz);
+  scene.add(roof);
+
+  // ── 屋根フレーム（前後の梁）──────────────────────────
+  const beamMat = new THREE.MeshLambertMaterial({ color: 0x686e72, emissive: 0x303030, emissiveIntensity: 0.2 });
+  const beamH = 0.06, beamD = 0.08;
+  for (const dz of [-roofD / 2 + beamD / 2, roofD / 2 - beamD / 2]) {
+    const beamGeo = new THREE.BoxGeometry(roofW, beamH, beamD);
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.set(cx, pillarH - beamH / 2, cz + dz);
+    scene.add(beam);
+  }
+  // 左右の梁
+  for (const dx of [-roofW / 2 + beamD / 2, roofW / 2 - beamD / 2]) {
+    const beamGeo = new THREE.BoxGeometry(beamD, beamH, roofD);
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.set(cx + dx, pillarH - beamH / 2, cz);
+    scene.add(beam);
   }
 }
 
