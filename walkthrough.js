@@ -475,6 +475,141 @@ function toColor(hex) {
 
 const DOMA_DROP = 0.15;  // 土間の床段差（m）
 
+// ─────────────────────────────────────────────────────────
+// 床材テクスチャ
+// ─────────────────────────────────────────────────────────
+const _floorTexCache = {};
+
+function makeFloorTexture(typeId) {
+  if (_floorTexCache[typeId]) return _floorTexCache[typeId];
+
+  const SZ = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = SZ;
+  const ctx = cv.getContext('2d');
+
+  if (typeId === 'bathroom' || typeId === 'toilet' || typeId === 'washroom') {
+    // タイル: 白地にグレーの目地線
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, SZ, SZ);
+    const TILE = 64; // 4×4グリッド
+    ctx.strokeStyle = '#c0c4c8';
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= SZ; i += TILE) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, SZ); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(SZ, i); ctx.stroke();
+    }
+    // タイル面に微妙なグラデーション
+    for (let ty = 0; ty < SZ; ty += TILE) {
+      for (let tx = 0; tx < SZ; tx += TILE) {
+        const g = ctx.createLinearGradient(tx+1, ty+1, tx+TILE-2, ty+TILE-2);
+        g.addColorStop(0, 'rgba(255,255,255,0.35)');
+        g.addColorStop(1, 'rgba(0,0,0,0.05)');
+        ctx.fillStyle = g;
+        ctx.fillRect(tx+2, ty+2, TILE-4, TILE-4);
+      }
+    }
+  } else if (typeId === 'tatami') {
+    // 畳: 黄緑色の縦縞（い草の編み目風）
+    ctx.fillStyle = '#c8d89a';
+    ctx.fillRect(0, 0, SZ, SZ);
+    const PLANK = 32;
+    for (let i = 0; i < SZ; i += PLANK) {
+      // 畳の境界線
+      ctx.strokeStyle = '#a0b060';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(SZ, i); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, SZ); ctx.stroke();
+      // い草の細かい縦線
+      ctx.strokeStyle = 'rgba(130,160,60,0.35)';
+      ctx.lineWidth = 0.8;
+      for (let s = 2; s < PLANK; s += 4) {
+        ctx.beginPath(); ctx.moveTo(i+s, 0); ctx.lineTo(i+s, SZ); ctx.stroke();
+      }
+    }
+  } else if (typeId === 'doma' || typeId === 'genkan') {
+    // 土間/玄関: モルタル風（薄グレー + ランダム粒子）
+    ctx.fillStyle = '#c0bbb4';
+    ctx.fillRect(0, 0, SZ, SZ);
+    // コンクリート粒子
+    const rng = mulberry32(42);
+    for (let i = 0; i < 800; i++) {
+      const x = rng() * SZ, y = rng() * SZ;
+      const r = rng() * 2 + 0.5;
+      const b = Math.floor(rng() * 40) - 20;
+      const base = 160 + b;
+      ctx.fillStyle = `rgba(${base},${base-2},${base-4},0.5)`;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+    }
+    // 目地線
+    ctx.strokeStyle = 'rgba(100,100,100,0.18)';
+    ctx.lineWidth = 1;
+    const STONE = 80;
+    for (let i = 0; i <= SZ; i += STONE) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, SZ); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(SZ, i); ctx.stroke();
+    }
+  } else {
+    // フローリング: 木目の板（ldk, living, dining, kitchen, bedroom, child, study, corridor, storage, balcony, custom など）
+    const PLANK_W = SZ / 3;
+    const baseHue = (typeId === 'kitchen' || typeId === 'bathroom') ? 28 : 24;
+    ctx.fillStyle = `hsl(${baseHue},40%,68%)`;
+    ctx.fillRect(0, 0, SZ, SZ);
+
+    const rng = mulberry32(typeId.split('').reduce((a, c) => a + c.charCodeAt(0), 0));
+    const PLANK_H = 128;
+    for (let col = 0; col < 3; col++) {
+      const offsetY = col % 2 === 0 ? 0 : PLANK_H / 2;
+      for (let rowStart = -PLANK_H; rowStart < SZ + PLANK_H; rowStart += PLANK_H) {
+        const y = rowStart - offsetY;
+        const x = col * PLANK_W;
+        const lightness = 62 + rng() * 12;
+        // 板の背景
+        ctx.fillStyle = `hsl(${baseHue + rng()*6 - 3},38%,${lightness}%)`;
+        ctx.fillRect(x+1, y+1, PLANK_W-2, PLANK_H-2);
+        // 木目線
+        ctx.strokeStyle = `hsla(${baseHue-2},40%,${lightness-12}%,0.45)`;
+        ctx.lineWidth = 0.8;
+        const grainCount = 5 + Math.floor(rng() * 5);
+        for (let g = 0; g < grainCount; g++) {
+          const gx = x + 1 + rng() * (PLANK_W - 2);
+          ctx.beginPath();
+          ctx.moveTo(gx, y);
+          ctx.bezierCurveTo(gx + rng()*8-4, y + PLANK_H*0.3, gx + rng()*8-4, y + PLANK_H*0.6, gx + rng()*6-3, y + PLANK_H);
+          ctx.stroke();
+        }
+      }
+    }
+    // 板間の境界線（横・縦）
+    ctx.strokeStyle = 'rgba(100,60,20,0.22)';
+    ctx.lineWidth = 1.5;
+    for (let col = 0; col <= 3; col++) {
+      ctx.beginPath(); ctx.moveTo(col*PLANK_W, 0); ctx.lineTo(col*PLANK_W, SZ); ctx.stroke();
+    }
+    const PLANK_H2 = 128;
+    for (let i = 0; i <= SZ; i += PLANK_H2) {
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(SZ, i); ctx.stroke();
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  // 1テクスチャ = 約91cm×91cm (1セル) に対して1リピート
+  tex.repeat.set(1, 1);
+  _floorTexCache[typeId] = tex;
+  return tex;
+}
+
+// シンプルな疑似乱数（seed指定可能）
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
 function generateFloors(scene, rooms, baseY) {
   // 全土間セルのセットを先に収集（隣接判定に使用）
   const allDomaCells = new Set();
@@ -494,7 +629,9 @@ function generateFloors(scene, rooms, baseY) {
     if (r.typeId === 'void') continue;
     const isDoma = r.isDoma ?? (r.typeId === 'doma' || r.typeId === 'genkan');
     const floorY = isDoma ? baseY - DOMA_DROP : baseY;
-    const mat = new THREE.MeshLambertMaterial({ color: isDoma ? 0xb8b0a4 : toColor(r.color) });
+    const texTypeId = isDoma ? (r.typeId || 'doma') : r.typeId;
+    const tex = makeFloorTexture(texTypeId);
+    const mat = new THREE.MeshLambertMaterial({ map: tex });
     if (r.cells) {
       for (const key of r.cells) {
         const [col, row] = key.split(',').map(Number);
@@ -507,7 +644,12 @@ function generateFloors(scene, rooms, baseY) {
       // 土間: セルの縁に段差側面を追加（他の土間セルとの境界は除く）
       if (isDoma) addDomaEdges(scene, r.cells, baseY, allDomaCells);
     } else {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w * CELL, r.h * CELL), mat);
+      // 矩形床: テクスチャを部屋サイズ分リピートさせるためcloneしてrepeatを設定
+      const rectTex = tex.clone();
+      rectTex.needsUpdate = true;
+      rectTex.repeat.set(r.w, r.h);
+      const rectMat = new THREE.MeshLambertMaterial({ map: rectTex });
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w * CELL, r.h * CELL), rectMat);
       m.rotation.x = -Math.PI / 2;
       m.position.set((r.x + r.w/2)*CELL, floorY + 0.001, (r.y + r.h/2)*CELL);
       m.receiveShadow = true;
