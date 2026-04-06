@@ -371,6 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── グリッドクリック（部屋モード選択解除）───────────────
   document.getElementById('grid').addEventListener('click', e => {
     if (state.mode !== 'room') return;
+    if (ui.editingRoomId) return; // セル編集中は選択をクリアしない
     if (!e.target.closest('.room-block') && !e.target.closest('.room-cell') &&
         !e.target.closest('.stair-block') && !e.target.closest('.furniture-block')) {
       if (ui.multiSelected.size > 0) { clearMultiSelected(); return; }
