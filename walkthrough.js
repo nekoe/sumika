@@ -285,8 +285,8 @@ function buildScene(scene, floors, state) {
     // フロアの床・天井
     generateFloors(scene, rooms, baseY);
     generateZoneFloors(scene, rooms, baseY);
-    generateCeilings(scene, rooms, baseY, aboveVoidCells);
-    if (fi > 0) generateFloorSlab(scene, rooms, baseY);
+    generateCeilings(scene, rooms, baseY, aboveVoidCells, state.wallColor);
+    if (fi > 0) generateFloorSlab(scene, rooms, baseY, state.wallColor);
 
     // 下のフロアのvoidセルキー（吹き抜け上部の壁を下まで延ばすために使用）
     const belowVoidCells = fi > 0 ? getVoidCells(floors[fi - 1].rooms || []) : new Set();
@@ -302,7 +302,7 @@ function buildScene(scene, floors, state) {
     })() : new Set();
 
     // 壁・建具
-    const { wallSegs, doorMap } = generateWalls(scene, { rooms, elements, stairs }, baseY, belowVoidCells, lowerOccupied, aboveVoidCells);
+    const { wallSegs, doorMap } = generateWalls(scene, { rooms, elements, stairs }, baseY, belowVoidCells, lowerOccupied, aboveVoidCells, state.wallColor);
 
     // 不定形部屋はセルごとにrectを生成（バウンディングボックスより正確な衝突判定）
     // void部屋は歩行不可（吹き抜け）
@@ -473,8 +473,9 @@ function addDomaEdges(scene, cells, baseY, allDomaCells) {
   }
 }
 
-function generateFloorSlab(scene, rooms, baseY) {
-  const slabMat = new THREE.MeshLambertMaterial({ color: 0xe8e0d8 });
+function generateFloorSlab(scene, rooms, baseY, wallColor) {
+  const slabColor = wallColor ? parseInt(wallColor.replace('#', ''), 16) : 0xe8e0d8;
+  const slabMat = new THREE.MeshLambertMaterial({ color: slabColor, emissive: slabColor, emissiveIntensity: 0.35 });
   for (const r of rooms) {
     if (r.typeId === 'void') continue;
     if (r.cells) {
@@ -510,8 +511,9 @@ function generateZoneFloors(scene, rooms, baseY) {
   }
 }
 
-function generateCeilings(scene, rooms, baseY, aboveVoidCells = new Set()) {
-  const mat = new THREE.MeshLambertMaterial({ color: 0xf8f8f6, side: THREE.DoubleSide });
+function generateCeilings(scene, rooms, baseY, aboveVoidCells = new Set(), wallColor) {
+  const ceilColor = wallColor ? parseInt(wallColor.replace('#', ''), 16) : 0xf8f8f6;
+  const mat = new THREE.MeshLambertMaterial({ color: ceilColor, emissive: ceilColor, emissiveIntensity: 0.35, side: THREE.DoubleSide });
   for (const r of rooms) {
     if (r.cells) {
       for (const key of r.cells) {
@@ -821,7 +823,7 @@ function genFridge(scene, x, z, fw, fd, baseY) {
 // ─────────────────────────────────────────────────────────
 // 壁・建具生成
 // ─────────────────────────────────────────────────────────
-function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), lowerOccupied = new Set(), aboveVoidCells = new Set()) {
+function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), lowerOccupied = new Set(), aboveVoidCells = new Set(), wallColor) {
   const { rooms, elements, stairs } = floorState;
   const occupied  = new Set();
   const domaCells = new Set();
@@ -859,7 +861,8 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
   const elMap = new Map();
   for (const el of (elements || [])) elMap.set(`${el.dir}:${el.col}:${el.row}`, el);
 
-  const wallMat  = new THREE.MeshLambertMaterial({ color: 0xf2ede6 });
+  const wallMatColor = wallColor ? parseInt(wallColor.replace('#', ''), 16) : 0xf2ede6;
+  const wallMat  = new THREE.MeshLambertMaterial({ color: wallMatColor, emissive: wallMatColor, emissiveIntensity: 0.35 });
   const glassMat = new THREE.MeshPhysicalMaterial({
     color: 0x99ccff, transparent: true, opacity: 0.22,
     roughness: 0.05, metalness: 0, side: THREE.DoubleSide,
@@ -869,7 +872,8 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
   function getElWallMat(el) {
     if (!el?.color) return wallMat;
     if (matCache.has(el.color)) return matCache.get(el.color);
-    const m = new THREE.MeshLambertMaterial({ color: parseInt(el.color.replace('#', ''), 16) });
+    const c = parseInt(el.color.replace('#', ''), 16);
+    const m = new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.35 });
     matCache.set(el.color, m);
     return m;
   }
