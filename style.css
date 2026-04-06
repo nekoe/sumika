@@ -736,6 +736,23 @@ body {
 }
 #wt-close:hover { background: rgba(220,38,38,0.8); border-color: transparent; }
 
+/* 外観/内部切替ボタン */
+#wt-view-toggle {
+  position: absolute;
+  bottom: 20px; left: 20px;
+  background: rgba(20,20,40,0.7);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  transition: background .15s;
+}
+#wt-view-toggle:hover { background: rgba(60,80,160,0.85); border-color: rgba(255,255,255,0.4); }
+
 /* ============================================================
    モードボタン
    ============================================================ */

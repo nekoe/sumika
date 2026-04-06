@@ -44,6 +44,7 @@ export function startWalkthrough(state) {
     </div>
     <canvas id="wt-minimap"></canvas>
     <div id="wt-door-hint"></div>
+    <button id="wt-view-toggle">🏗️ 外観</button>
     <button id="wt-close">✕ 終了 (Esc)</button>
   `;
   document.body.appendChild(overlay);
@@ -63,6 +64,33 @@ export function startWalkthrough(state) {
   scene.fog = new THREE.Fog(0x87ceeb, 18, 50);
 
   const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 60);
+
+  // ── 外観モード用オービット状態 ────────────────────────
+  let isExterior   = false;
+  let orbitTheta   = -Math.PI * 0.35; // 水平角
+  let orbitPhi     = 0.45;            // 仰角
+  let orbitDragging = false;
+  let orbitLastX   = 0, orbitLastY = 0;
+
+  // 建物のバウンディングボックス計算
+  let minGX = Infinity, maxGX = -Infinity, minGZ = Infinity, maxGZ = -Infinity;
+  for (const r of allRooms) {
+    if (r.cells) {
+      for (const key of r.cells) {
+        const [c, ro] = key.split(',').map(Number);
+        if (c   < minGX) minGX = c;   if (c+1  > maxGX) maxGX = c+1;
+        if (ro  < minGZ) minGZ = ro;  if (ro+1 > maxGZ) maxGZ = ro+1;
+      }
+    } else {
+      if (r.x     < minGX) minGX = r.x;     if (r.x+r.w > maxGX) maxGX = r.x+r.w;
+      if (r.y     < minGZ) minGZ = r.y;     if (r.y+r.h > maxGZ) maxGZ = r.y+r.h;
+    }
+  }
+  const buildingCX   = (minGX + maxGX) / 2 * CELL;
+  const buildingCZ   = (minGZ + maxGZ) / 2 * CELL;
+  const buildingSpan = Math.max((maxGX - minGX) * CELL, (maxGZ - minGZ) * CELL, 5);
+  const orbitCenter  = new THREE.Vector3(buildingCX, FLOOR_H * 0.6, buildingCZ);
+  let   orbitRadius  = buildingSpan * 0.9 + 6;
 
   // ── シーン構築 ────────────────────────────────────────
   const { floorData, stairAreas, sunLight } = buildScene(scene, floors, state);
@@ -102,11 +130,32 @@ export function startWalkthrough(state) {
   const onKD = e => { keys[e.code] = true; };
   const onKU = e => { keys[e.code] = false; };
 
-  canvas.addEventListener('click', () => canvas.requestPointerLock());
+  canvas.addEventListener('click', () => { if (!isExterior) canvas.requestPointerLock(); });
   document.addEventListener('pointerlockchange', onPLC);
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('keydown', onKD);
   document.addEventListener('keyup', onKU);
+
+  // ── オービットコントロール（外観モード） ──────────────
+  const onOrbitDown = e => {
+    if (!isExterior) return;
+    orbitDragging = true; orbitLastX = e.clientX; orbitLastY = e.clientY;
+  };
+  const onOrbitMove = e => {
+    if (!isExterior || !orbitDragging) return;
+    orbitTheta -= (e.clientX - orbitLastX) * 0.005;
+    orbitPhi    = Math.max(0.05, Math.min(Math.PI / 2 - 0.05, orbitPhi - (e.clientY - orbitLastY) * 0.005));
+    orbitLastX = e.clientX; orbitLastY = e.clientY;
+  };
+  const onOrbitUp   = () => { orbitDragging = false; };
+  const onOrbitWheel = e => {
+    if (!isExterior) return;
+    orbitRadius = Math.max(3, Math.min(80, orbitRadius + e.deltaY * 0.025));
+  };
+  canvas.addEventListener('mousedown', onOrbitDown);
+  document.addEventListener('mousemove', onOrbitMove);
+  document.addEventListener('mouseup',   onOrbitUp);
+  canvas.addEventListener('wheel', onOrbitWheel, { passive: true });
 
   // ── ミニマップ ────────────────────────────────────────
   const mmC = document.getElementById('wt-minimap');
@@ -135,6 +184,17 @@ export function startWalkthrough(state) {
       camera.updateProjectionMatrix();
     }
 
+    // ── 外観モード（オービットカメラ） ────────────────────
+    if (isExterior) {
+      const sinT = Math.sin(orbitTheta), cosT = Math.cos(orbitTheta);
+      const sinP = Math.sin(orbitPhi),   cosP = Math.cos(orbitPhi);
+      camera.position.set(
+        orbitCenter.x + orbitRadius * sinT * cosP,
+        orbitCenter.y + orbitRadius * sinP,
+        orbitCenter.z + orbitRadius * cosT * cosP
+      );
+      camera.lookAt(orbitCenter);
+    } else
     // ── 階段遷移中 ─────────────────────────────────────
     if (stairTransition) {
       stairTransition.progress += dt * STAIR_SPEED;
@@ -214,6 +274,31 @@ export function startWalkthrough(state) {
   }
   animate();
 
+  // ── 外観/内部切り替え ────────────────────────────────
+  function toggleViewMode() {
+    isExterior = !isExterior;
+    const btn  = document.getElementById('wt-view-toggle');
+    const hint = document.getElementById('wt-hint');
+    if (isExterior) {
+      document.exitPointerLock();
+      isLocked = false;
+      btn.textContent = '🚶 内部';
+      hint.style.display = 'none';
+      scene.fog = null;
+      camera.far = 150;
+      camera.updateProjectionMatrix();
+    } else {
+      btn.textContent = '🏗️ 外観';
+      scene.fog = new THREE.Fog(0x87ceeb, 18, 50);
+      camera.far = 60;
+      camera.updateProjectionMatrix();
+      camera.position.set(camera.position.x, currentFloor3D * FLOOR_H + EYE_H, camera.position.z);
+      camera.rotation.set(pitch, yaw, 0, 'YXZ');
+      hint.style.display = 'flex';
+    }
+  }
+  document.getElementById('wt-view-toggle').addEventListener('click', toggleViewMode);
+
   // ── 終了 ─────────────────────────────────────────────
   function close() {
     if (!running) return;
@@ -223,6 +308,8 @@ export function startWalkthrough(state) {
     overlay.remove();
     document.removeEventListener('pointerlockchange', onPLC);
     document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mousemove', onOrbitMove);
+    document.removeEventListener('mouseup',   onOrbitUp);
     document.removeEventListener('keydown', onKD);
     document.removeEventListener('keyup', onKU);
     document.removeEventListener('keydown', onEscClose);
