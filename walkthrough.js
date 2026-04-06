@@ -745,14 +745,35 @@ function addBox(scene, color, px, py, pz, sw, sh, sd) {
   scene.add(mesh);
 }
 
+function addCyl(scene, color, px, py, pz, r, h, segs = 12) {
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(r, r, h, segs),
+    new THREE.MeshLambertMaterial({ color })
+  );
+  mesh.position.set(px, py, pz);
+  scene.add(mesh);
+}
+
 function genKitchen(scene, x, z, fw, fd, baseY) {
   // カウンター本体
   addBox(scene, 0xd0d0c8, x + fw/2, baseY + 0.45, z + fd/2, fw, 0.9, fd);
   // 天板
   addBox(scene, 0x888880, x + fw/2, baseY + 0.91, z + fd/2, fw, 0.03, fd);
-  // シンク（凹み表現: 暗い色の箱）
+  // シンク凹み
   const sinkW = Math.min(0.4, fw * 0.4);
-  addBox(scene, 0x707070, x + fw * 0.35, baseY + 0.93, z + fd/2, sinkW, 0.05, fd * 0.6);
+  const sinkX = x + fw * 0.35;
+  addBox(scene, 0x606060, sinkX, baseY + 0.93, z + fd/2, sinkW, 0.05, fd * 0.6);
+  // 蛇口（ネック＋スパウト）
+  addBox(scene, 0xa0a8b0, sinkX, baseY + 1.08, z + fd * 0.2, 0.03, 0.32, 0.03);
+  addBox(scene, 0xa0a8b0, sinkX + 0.09, baseY + 1.23, z + fd * 0.2, 0.2, 0.03, 0.03);
+  // 前面扉と取っ手（z+fd 側 = 手前）
+  const nPanels = Math.max(1, Math.round(fw / 0.6));
+  const pw = fw / nPanels;
+  for (let i = 0; i < nPanels; i++) {
+    const cx = x + (i + 0.5) * pw;
+    addBox(scene, 0xc8c8c0, cx, baseY + 0.44, z + fd - 0.01, pw - 0.025, 0.76, 0.018);
+    addBox(scene, 0x707880, cx, baseY + 0.58, z + fd + 0.005, pw * 0.45, 0.025, 0.02);
+  }
 }
 
 function genBath(scene, x, z, fw, fd, baseY) {
@@ -795,12 +816,19 @@ function genTable(scene, x, z, fw, fd, baseY) {
 
 function genWasher(scene, x, z, fw, fd, baseY) {
   addBox(scene, 0xe0f2fe, x + fw/2, baseY + 0.45, z + fd/2, fw*0.9, 0.9, fd*0.9);
-  // ドラム窓
-  const geo = new THREE.CylinderGeometry(Math.min(fw, fd)*0.28, Math.min(fw, fd)*0.28, 0.06, 16);
-  const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.5 }));
-  mesh.rotation.x = Math.PI / 2;
-  mesh.position.set(x + fw/2, baseY + 0.55, z + fd * 0.05);
-  scene.add(mesh);
+  // ドラム窓（円形ガラス）
+  const r = Math.min(fw, fd) * 0.28;
+  const drumGeo = new THREE.CylinderGeometry(r, r, 0.06, 16);
+  const drumMesh = new THREE.Mesh(drumGeo, new THREE.MeshPhysicalMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.5 }));
+  drumMesh.rotation.x = Math.PI / 2;
+  drumMesh.position.set(x + fw/2, baseY + 0.5, z + fd * 0.04);
+  scene.add(drumMesh);
+  // ドアハンドル（円の右端）
+  addBox(scene, 0x64748b, x + fw/2 + r * 0.85, baseY + 0.5, z + fd * 0.01, 0.03, 0.1, 0.025);
+  // コントロールパネル（上部）
+  addBox(scene, 0xbae6fd, x + fw/2, baseY + 0.875, z + fd * 0.04, fw * 0.72, 0.055, 0.02);
+  // 電源ボタン
+  addCyl(scene, 0x3b82f6, x + fw * 0.72, baseY + 0.875, z + fd * 0.03, 0.025, 0.025, 8);
 }
 
 function genSink(scene, x, z, fw, fd, baseY) {
@@ -808,16 +836,26 @@ function genSink(scene, x, z, fw, fd, baseY) {
   addBox(scene, 0xf0fdfa, x + fw/2, baseY + 0.4, z + fd/2, fw*0.9, 0.8, fd*0.9);
   // 天板
   addBox(scene, 0xccfbf1, x + fw/2, baseY + 0.81, z + fd/2, fw*0.9, 0.03, fd*0.9);
-  // ボウル
+  // ボウル（シンク）
   addBox(scene, 0x99f6e4, x + fw/2, baseY + 0.83, z + fd/2, fw*0.55, 0.05, fd*0.55);
+  // 蛇口ネック
+  addBox(scene, 0xa0a8b0, x + fw/2, baseY + 1.0, z + fd * 0.18, 0.03, 0.38, 0.03);
+  // 蛇口スパウト
+  addBox(scene, 0xa0a8b0, x + fw/2 + 0.06, baseY + 1.18, z + fd * 0.18, 0.14, 0.03, 0.03);
+  // 湯（赤）・水（青）ハンドル
+  addBox(scene, 0xf87171, x + fw/2 - 0.1, baseY + 0.93, z + fd * 0.12, 0.055, 0.03, 0.055);
+  addBox(scene, 0x60a5fa, x + fw/2 + 0.1, baseY + 0.93, z + fd * 0.12, 0.055, 0.03, 0.055);
 }
 
 function genFridge(scene, x, z, fw, fd, baseY) {
   // 本体（天井近くまで）
-  addBox(scene, 0xfafafa, x + fw/2, baseY + 0.9, z + fd/2, fw*0.92, 1.8, fd*0.9);
-  // ドアライン（上下区切り）
-  addBox(scene, 0xe5e7eb, x + fw/2, baseY + 0.6, z + fd*0.04, fw*0.88, 0.03, 0.02);
-  addBox(scene, 0xe5e7eb, x + fw/2, baseY + 1.2, z + fd*0.04, fw*0.88, 0.03, 0.02);
+  addBox(scene, 0xf8f8f8, x + fw/2, baseY + 0.9, z + fd/2, fw*0.92, 1.8, fd*0.9);
+  // 冷凍/冷蔵 仕切り線
+  addBox(scene, 0xd1d5db, x + fw/2, baseY + 0.65, z + fd * 0.045, fw * 0.88, 0.025, 0.015);
+  // 冷凍室ハンドル（上）
+  addBox(scene, 0x9ca3af, x + fw * 0.82, baseY + 0.38, z + fd * 0.05, 0.025, 0.22, 0.04);
+  // 冷蔵室ハンドル（下）
+  addBox(scene, 0x9ca3af, x + fw * 0.82, baseY + 1.15, z + fd * 0.05, 0.025, 0.4, 0.04);
 }
 
 // ─────────────────────────────────────────────────────────
