@@ -1,6 +1,6 @@
 // データの保存・読込・エクスポート
 
-const STORAGE_KEY = 'myhome-project-v3';
+const STORAGE_KEY = 'sumika-project-v3';
 
 export function saveProject(state) {
   try {
@@ -29,7 +29,10 @@ export function loadProject() {
     // v3 を試す
     let raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      // v2 の旧データを試す
+      // 旧キー名(myhome)からの移行
+      raw = localStorage.getItem('myhome-project-v3');
+    }
+    if (!raw) {
       raw = localStorage.getItem('myhome-project-v2');
     }
     if (!raw) {
@@ -118,6 +121,7 @@ export function importJSON(file, onSuccess, onError) {
 
 export function resetProject() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem('myhome-project-v3'); // 旧キー名
   localStorage.removeItem('myhome-project-v2');
   localStorage.removeItem('myhome-project-v1');
 }
