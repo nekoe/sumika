@@ -979,8 +979,6 @@ function generateFurnitureItems(scene, furniture, baseY) {
     if (rotY === 0) {
       switch (f.typeId) {
         case 'kitchen': genKitchen(scene, x, z, fw, fd, baseY); break;
-        case 'bath':    genBath(scene, x, z, fw, fd, baseY); break;
-        case 'toilet':  genToilet(scene, x, z, fw, fd, baseY); break;
         case 'chair':   genChair(scene, x, z, fw, fd, baseY); break;
         case 'table':   genTable(scene, x, z, fw, fd, baseY); break;
         case 'washer':  genWasher(scene, x, z, fw, fd, baseY); break;
@@ -994,8 +992,6 @@ function generateFurnitureItems(scene, furniture, baseY) {
       // gen関数には中心からのオフセットを渡す（ox=-fw/2, oz=-fd/2）
       switch (f.typeId) {
         case 'kitchen': genKitchen(group, -fw/2, -fd/2, fw, fd, baseY); break;
-        case 'bath':    genBath(group, -fw/2, -fd/2, fw, fd, baseY); break;
-        case 'toilet':  genToilet(group, -fw/2, -fd/2, fw, fd, baseY); break;
         case 'chair':   genChair(group, -fw/2, -fd/2, fw, fd, baseY); break;
         case 'table':   genTable(group, -fw/2, -fd/2, fw, fd, baseY); break;
         case 'washer':  genWasher(group, -fw/2, -fd/2, fw, fd, baseY); break;
@@ -1162,20 +1158,6 @@ function genKitchen(scene, x, z, fw, fd, baseY) {
   }
 }
 
-function genBath(scene, x, z, fw, fd, baseY) {
-  // 浴槽外壁
-  addBox(scene, 0xdbeafe, x + fw/2, baseY + 0.3, z + fd/2, fw, 0.6, fd);
-  // 内側（水面）
-  addBox(scene, 0x93c5fd, x + fw/2, baseY + 0.58, z + fd/2, fw*0.8, 0.03, fd*0.75);
-}
-
-function genToilet(scene, x, z, fw, fd, baseY) {
-  const bw = Math.min(fw, 0.35), bd = Math.min(fd * 0.65, 0.45);
-  // 便器本体
-  addBox(scene, 0xf0fdf4, x + fw/2, baseY + 0.22, z + fd*0.55, bw, 0.44, bd);
-  // タンク
-  addBox(scene, 0xe7f7ed, x + fw/2, baseY + 0.5, z + fd*0.12, bw*0.9, 0.35, fd*0.22);
-}
 
 function genChair(scene, x, z, fw, fd, baseY) {
   const sw = fw * 0.7, sd = fd * 0.7;
