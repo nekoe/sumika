@@ -228,13 +228,35 @@ function _appendAreaFooter(panel) {
     const sqm   = (cellCount * CELL_M * CELL_M).toFixed(1);
     return { fi, count: rooms.length, tsubo, sqm };
   });
-  const totalTsubo = rows.reduce((s, r) => s + parseFloat(r.tsubo), 0).toFixed(2);
-  const totalSqm   = rows.reduce((s, r) => s + parseFloat(r.sqm),   0).toFixed(1);
-  const landM2     = calcLandArea(state.land?.points ?? []);
+  const totalTsubo    = rows.reduce((s, r) => s + parseFloat(r.tsubo), 0).toFixed(2);
+  const totalSqm      = rows.reduce((s, r) => s + parseFloat(r.sqm),   0).toFixed(1);
+  const landM2        = calcLandArea(state.land?.points ?? []);
+
+  // 建ぺい率 = 1F面積 / 土地面積、容積率 = 全階延べ床面積 / 土地面積
+  const floor1Sqm     = parseFloat(rows[0]?.sqm ?? 0);
+  const totalFloorSqm = parseFloat(totalSqm);
+  const kenpei = landM2 > 0 ? (floor1Sqm    / landM2 * 100).toFixed(1) : null;
+  const yoseki = landM2 > 0 ? (totalFloorSqm / landM2 * 100).toFixed(1) : null;
 
   const footer = document.createElement('div');
   footer.className = 'area-footer';
   footer.innerHTML = `
+    <div class="area-summary">
+      <div class="area-summary-title">土地面積</div>
+      ${landM2 > 0 ? `
+        <div class="area-row area-total">
+          <span class="area-val"><b>${(landM2 / 3.305785).toFixed(1)}</b>坪</span>
+          <span class="area-sqm">${landM2.toFixed(1)}㎡</span>
+        </div>
+        <div class="area-row">
+          <span class="area-floor">建ぺい率</span>
+          <span class="area-val">${kenpei}%</span>
+        </div>
+        <div class="area-row">
+          <span class="area-floor">容積率</span>
+          <span class="area-val">${yoseki}%</span>
+        </div>` : '<p class="hint">土地未設定</p>'}
+    </div>
     <div class="area-summary">
       <div class="area-summary-title">間取り面積</div>
       ${rows.map(r => r.count > 0 ? `
@@ -251,12 +273,6 @@ function _appendAreaFooter(panel) {
           <span class="area-val"><b>${totalTsubo}</b>坪</span>
           <span class="area-sqm">${totalSqm}㎡</span>
         </div>` : '<p class="hint">まだ部屋がありません</p>'}
-    </div>
-    <div class="area-summary">
-      <div class="area-summary-title">土地面積</div>
-      ${landM2 > 0
-        ? `<div class="area-row area-total"><span class="area-val"><b>${(landM2 / 3.305785).toFixed(1)}</b>坪</span><span class="area-sqm">${landM2.toFixed(1)}㎡</span></div>`
-        : '<p class="hint">土地未設定</p>'}
     </div>`;
   panel.appendChild(footer);
 }
