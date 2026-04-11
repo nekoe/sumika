@@ -385,7 +385,6 @@ function buildScene(scene, floors, state) {
 
     // フロアの床・天井
     generateFloors(scene, rooms, baseY);
-    generateZoneFloors(scene, rooms, baseY);
     generateCeilings(scene, rooms, baseY, aboveVoidCells, state.wallColor);
     if (fi > 0) generateFloorSlab(scene, rooms, baseY, state.wallColor);
 
@@ -463,7 +462,7 @@ function buildScene(scene, floors, state) {
 // ─────────────────────────────────────────────────────────
 // 太陽光位置計算
 // ─────────────────────────────────────────────────────────
-export function updateSunPosition(sun, state) {
+function updateSunPosition(sun, state) {
   const compass  = (state.compass  || 0) * Math.PI / 180;
   const hour     = state.sunHour   ?? 12;
   const azFromNorth = (90 + (hour - 6) * 15) * Math.PI / 180;
@@ -741,21 +740,6 @@ function generateFloorSlab(scene, rooms, baseY, wallColor) {
   }
 }
 
-function generateZoneFloors(scene, rooms, baseY) {
-  for (const r of rooms) {
-    for (const z of (r.zones || [])) {
-      const m = new THREE.Mesh(
-        new THREE.PlaneGeometry(z.w*CELL, z.h*CELL),
-        new THREE.MeshLambertMaterial({ color: toColor(z.color) })
-      );
-      m.rotation.x = -Math.PI / 2;
-      m.position.set((r.x+z.x+z.w/2)*CELL, baseY + 0.003, (r.y+z.y+z.h/2)*CELL);
-      m.receiveShadow = true;
-      scene.add(m);
-      addZoneLabel(scene, z.label, (r.x+z.x+z.w/2)*CELL, baseY + 0.05, (r.y+z.y+z.h/2)*CELL);
-    }
-  }
-}
 
 function generateCeilings(scene, rooms, baseY, aboveVoidCells = new Set(), wallColor) {
   const ceilColor = wallColor ? parseInt(wallColor.replace('#', ''), 16) : 0xf8f8f6;
@@ -1564,23 +1548,6 @@ function tryMove(cx, cz, nx, nz, fd) {
   return { x: cx, z: cz };
 }
 
-// ─────────────────────────────────────────────────────────
-// ゾーンラベル
-// ─────────────────────────────────────────────────────────
-function addZoneLabel(scene, text, x, y, z) {
-  const c = document.createElement('canvas');
-  c.width = 256; c.height = 64;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.beginPath(); ctx.roundRect(4, 4, 248, 56, 10); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 26px sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, 128, 32);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
-  sp.scale.set(1.5, 0.38, 1);
-  sp.position.set(x, y + 0.05, z);
-  scene.add(sp);
-}
 
 // ─────────────────────────────────────────────────────────
 // ミニマップ

@@ -222,7 +222,7 @@ function renderAreaSummary(panel) {
 // ── 面積フッター（常時表示）────────────────────────────────────
 function _appendAreaFooter(panel) {
   const rows = state.floors.map((fl, fi) => {
-    const rooms = (fl.rooms || []).filter(r => r.typeId !== 'garage');
+    const rooms = fl.rooms || [];
     const cellCount = rooms.reduce((s, r) => s + r.cells.length, 0);
     const tsubo = (cellCount / 4).toFixed(2);
     const sqm   = (cellCount * CELL_M * CELL_M).toFixed(1);

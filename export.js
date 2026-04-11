@@ -198,7 +198,7 @@ export function handlePrint() {
 
   const headerEl = document.getElementById('print-header');
   const floorLabel = `${state.currentFloor + 1}F`;
-  const rooms = state.rooms.filter(r => r.typeId !== 'garage');
+  const rooms = state.rooms;
   const cellCount = rooms.reduce((s, r) => s + (r.cells?.length ?? 0), 0);
   const sqm   = (cellCount * CELL_M * CELL_M).toFixed(1);
   const tsubo = (cellCount / 4).toFixed(2);

@@ -15,10 +15,6 @@ export const ELEMENT_TOOLS = [
 export function edgeKey(col, row, dir) {
   return `${dir}:${col}:${row}`;
 }
-export function parseEdgeKey(key) {
-  const [dir, col, row] = key.split(':');
-  return { dir, col: +col, row: +row };
-}
 
 // SVGレイヤーをグリッド内に生成
 export function initWallLayer(gridEl) {

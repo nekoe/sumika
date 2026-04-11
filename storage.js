@@ -43,16 +43,14 @@ export function loadProject() {
 
     // v1/v2 形式（floors なし）を v3 形式に変換
     if (!data.floors) {
-      const rooms = (data.rooms || []).map(r => ({ zones: [], ...r }));
+      const rooms = data.rooms || [];
       data.floors = [
         { rooms, elements: data.elements || [], stairs: [] },
         { rooms: [], elements: [], stairs: [] },
       ];
       data.currentFloor = 0;
     } else {
-      // v3: zones フィールド補完
       for (const fl of data.floors) {
-        if (fl.rooms) fl.rooms = fl.rooms.map(r => ({ zones: [], ...r }));
         if (!fl.elements)   fl.elements   = [];
         if (!fl.stairs)     fl.stairs     = [];
         if (!fl.furniture)  fl.furniture  = [];

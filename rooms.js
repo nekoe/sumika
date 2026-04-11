@@ -22,14 +22,6 @@ export const ROOM_TYPES = [
   { id: 'custom',   label: 'カスタム',   defaultW: 3, defaultH: 3, color: '#FFFFFF', icon: '✏️' },
 ];
 
-export function calcArea(w, h) {
-  const area = w * h;
-  return {
-    tatami: (area / 2).toFixed(1),
-    sqm:    (area * CELL_M * CELL_M).toFixed(1),
-  };
-}
-
 export function calcAreaCells(cells) {
   const count = cells.length;
   return {
@@ -82,21 +74,3 @@ export function createRoomData(typeId, x, y) {
   };
 }
 
-export function createIrregularRoomData(typeId, cells) {
-  const cols = cells.map(k => +k.split(',')[0]);
-  const rows = cells.map(k => +k.split(',')[1]);
-  const x = Math.min(...cols);
-  const y = Math.min(...rows);
-  const w = Math.max(...cols) - x + 1;
-  const h = Math.max(...rows) - y + 1;
-  const type = getTypeById(typeId);
-  return {
-    id: generateId(),
-    typeId,
-    label: type.label,
-    x, y, w, h,
-    color: type.color,
-    cells,
-    isDoma: type.isDoma ?? false,
-  };
-}

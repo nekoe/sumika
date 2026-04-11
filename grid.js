@@ -31,7 +31,7 @@ export function canPlaceCells(grid, cells, excludeId = null) {
   return true;
 }
 
-export function placeRoom(grid, id, x, y, w, h) {
+function placeRoom(grid, id, x, y, w, h) {
   for (let r = y; r < y + h; r++) {
     for (let c = x; c < x + w; c++) {
       grid.cells[r][c] = id;
