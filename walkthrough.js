@@ -962,12 +962,14 @@ function generateFurnitureItems(scene, furniture, baseY) {
     // 回転がない場合はそのままsceneに描画
     if (rotY === 0) {
       switch (f.typeId) {
-        case 'kitchen': genKitchen(scene, x, z, fw, fd, baseY); break;
-        case 'chair':   genChair(scene, x, z, fw, fd, baseY); break;
-        case 'table':   genTable(scene, x, z, fw, fd, baseY); break;
-        case 'washer':  genWasher(scene, x, z, fw, fd, baseY); break;
-        case 'sink':    genSink(scene, x, z, fw, fd, baseY); break;
-        case 'fridge':  genFridge(scene, x, z, fw, fd, baseY); break;
+        case 'kitchen':  genKitchen(scene, x, z, fw, fd, baseY); break;
+        case 'chair':    genChair(scene, x, z, fw, fd, baseY); break;
+        case 'table':    genTable(scene, x, z, fw, fd, baseY); break;
+        case 'sofa':     genSofa(scene, x, z, fw, fd, baseY); break;
+        case 'lowtable': genLowTable(scene, x, z, fw, fd, baseY); break;
+        case 'washer':   genWasher(scene, x, z, fw, fd, baseY); break;
+        case 'sink':     genSink(scene, x, z, fw, fd, baseY); break;
+        case 'fridge':   genFridge(scene, x, z, fw, fd, baseY); break;
       }
     } else {
       // GroupでY軸回転: 家具を中心(0,0,0)基準で生成してから回転・移動
@@ -975,12 +977,14 @@ function generateFurnitureItems(scene, furniture, baseY) {
       const cx = x + fw / 2, cz = z + fd / 2;
       // gen関数には中心からのオフセットを渡す（ox=-fw/2, oz=-fd/2）
       switch (f.typeId) {
-        case 'kitchen': genKitchen(group, -fw/2, -fd/2, fw, fd, baseY); break;
-        case 'chair':   genChair(group, -fw/2, -fd/2, fw, fd, baseY); break;
-        case 'table':   genTable(group, -fw/2, -fd/2, fw, fd, baseY); break;
-        case 'washer':  genWasher(group, -fw/2, -fd/2, fw, fd, baseY); break;
-        case 'sink':    genSink(group, -fw/2, -fd/2, fw, fd, baseY); break;
-        case 'fridge':  genFridge(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'kitchen':  genKitchen(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'chair':    genChair(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'table':    genTable(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'sofa':     genSofa(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'lowtable': genLowTable(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'washer':   genWasher(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'sink':     genSink(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'fridge':   genFridge(group, -fw/2, -fd/2, fw, fd, baseY); break;
       }
       group.rotation.y = rotY;
       group.position.set(cx, 0, cz);
@@ -1208,6 +1212,41 @@ function genFridge(scene, x, z, fw, fd, baseY) {
   addBox(scene, 0x9ca3af, x + fw * 0.82, baseY + 0.38, z + fd * 0.05, 0.025, 0.22, 0.04);
   // 冷蔵室ハンドル（下）
   addBox(scene, 0x9ca3af, x + fw * 0.82, baseY + 1.15, z + fd * 0.05, 0.025, 0.4, 0.04);
+}
+
+function genSofa(scene, x, z, fw, fd, baseY) {
+  const fabric = 0xd4b896; // ベージュファブリック
+  const legCol = 0x5c3d1a; // 木製脚
+
+  // 底部フレーム（座面台座）
+  addBox(scene, fabric, x + fw/2, baseY + 0.22, z + fd/2, fw * 0.88, 0.44, fd * 0.78);
+  // 座面クッション
+  addBox(scene, 0xdec89e, x + fw/2, baseY + 0.47, z + fd/2 + fd * 0.06, fw * 0.76, 0.10, fd * 0.52);
+  // 背もたれ（北側）
+  addBox(scene, fabric, x + fw/2, baseY + 0.72, z + fd/2 - fd * 0.30, fw * 0.86, 0.54, fd * 0.18);
+  // 左アームレスト
+  addBox(scene, fabric, x + fw * 0.055, baseY + 0.50, z + fd/2, fw * 0.11, 0.20, fd * 0.78);
+  // 右アームレスト
+  addBox(scene, fabric, x + fw * 0.945, baseY + 0.50, z + fd/2, fw * 0.11, 0.20, fd * 0.78);
+  // 脚 x4
+  const lh = 0.14, lw = 0.05;
+  const ox = fw * 0.38, oz = fd * 0.30;
+  for (const [dx, dz] of [[ox,oz],[-ox,oz],[ox,-oz],[-ox,-oz]])
+    addBox(scene, legCol, x+fw/2+dx, baseY+lh/2, z+fd/2+dz, lw, lh, lw);
+}
+
+function genLowTable(scene, x, z, fw, fd, baseY) {
+  const topCol = 0xc8a86e; // 木目
+  const legCol = 0x8a6828;
+  // 天板
+  addBox(scene, topCol, x + fw/2, baseY + 0.40, z + fd/2, fw * 0.92, 0.05, fd * 0.88);
+  // 下段棚
+  addBox(scene, topCol, x + fw/2, baseY + 0.20, z + fd/2, fw * 0.78, 0.03, fd * 0.72);
+  // 脚 x4
+  const lh = 0.40, lw = 0.05;
+  const ox = fw * 0.40, oz = fd * 0.35;
+  for (const [dx, dz] of [[ox,oz],[-ox,oz],[ox,-oz],[-ox,-oz]])
+    addBox(scene, legCol, x+fw/2+dx, baseY+lh/2, z+fd/2+dz, lw, lh, lw);
 }
 
 // ─────────────────────────────────────────────────────────
