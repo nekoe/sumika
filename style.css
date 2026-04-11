@@ -607,6 +607,21 @@ body {
   box-shadow: 0 2px 8px rgba(124,58,237,.4);
 }
 
+/* 採光表示ボタン */
+#toolbar .btn-sunlight {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+#toolbar .btn-sunlight-active {
+  background: #fef08a;
+  border-color: #ca8a04;
+  color: #78350f;
+  font-weight: 600;
+}
+#toolbar .btn-sunlight-active:hover {
+  background: #fde047;
+}
+
 /* ============================================================
    3Dウォークスルー オーバーレイ
    ============================================================ */
@@ -921,6 +936,13 @@ body {
 /* ============================================================
    不定形描画プレビューキャンバス
    ============================================================ */
+#sunlight-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 8;  /* room-cell(z2) より上、room-label-block(z22) より下 */
+}
+
 #paint-canvas {
   position: absolute;
   top: 0; left: 0;

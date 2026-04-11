@@ -12,7 +12,7 @@ import { initLandLayer } from './land.js';
 import { pushUndo, undo, redo, canUndo, canRedo, resetUndoRedo } from './undo.js';
 import { initRotate, rotateFloorPlan } from './rotate.js';
 import { exportSVG, exportPNG, handlePrint } from './export.js';
-import { initRenderer, renderRooms, renderStairs, renderFurniture, renderLandscape, renderLandLayer, renderPaintPreview, renderCompassIndicator, applyGridCss } from './render.js';
+import { initRenderer, renderRooms, renderStairs, renderFurniture, renderLandscape, renderLandLayer, renderSunlightLayer, renderPaintPreview, renderCompassIndicator, applyGridCss } from './render.js';
 import { initInspector, updateInspector } from './inspector.js';
 import { initSelection, selectRoom, selectAll, toggleMultiSelect, clearMultiSelected, startMultiMoveDrag } from './selection.js';
 import { initPaletteRenderer, renderElementPalette, renderStairPalette, renderFurniturePalette, renderLandscapePalette } from './palette-renderer.js';
@@ -45,6 +45,7 @@ function renderAll() {
   renderLandscape();
   renderWallLayer(ui.svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows, ui.hoveredEdge, state.mode, ui.selectedElementKey);
   renderLandLayer();
+  renderSunlightLayer();
   updateInspector();
   ui.toolbar?.updateUndoRedo(canUndo(), canRedo());
 }
@@ -279,6 +280,9 @@ document.addEventListener('DOMContentLoaded', () => {
   ui.paintCanvas = document.createElement('canvas');
   ui.paintCanvas.id = 'paint-canvas';
   document.getElementById('grid').appendChild(ui.paintCanvas);
+  ui.sunlightCanvas = document.createElement('canvas');
+  ui.sunlightCanvas.id = 'sunlight-canvas';
+  document.getElementById('grid').appendChild(ui.sunlightCanvas);
 
   // ── モジュール初期化 ────────────────────────────────────
   initSelection({ renderAll, updateInspector, showToast });
@@ -354,7 +358,12 @@ document.addEventListener('DOMContentLoaded', () => {
     onPrint:      () => handlePrint(),
     onExportSVG:  () => exportSVG(),
     onExportPNG:  () => exportPNG(),
-    onCompassChange: () => { renderCompassIndicator(); saveProject(state); },
+    onCompassChange: () => { renderCompassIndicator(); renderSunlightLayer(); saveProject(state); },
+    onSunlightToggle: () => {
+      ui.sunlightVisible = !ui.sunlightVisible;
+      ui.toolbar?.setSunlight(ui.sunlightVisible);
+      renderSunlightLayer();
+    },
     onReset: () => {
       pushUndo();
       state.floors = [

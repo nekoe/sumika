@@ -1,6 +1,6 @@
 // ツールバーUI（2行コンパクトレイアウト）
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onRotate, onPrint, onExportSVG, onExportPNG }) {
+export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onSunlightToggle, onRotate, onPrint, onExportSVG, onExportPNG }) {
 
   container.innerHTML = `
     <!-- Row 1: メイン操作 -->
@@ -58,6 +58,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
         <span class="tb-ctx-label" title="採光シミュレーション">☀️</span>
         <label title="建物の向き（上が指定の方位）"><span id="compass-label">${compassLabel(state.compass ?? 0)}</span><input type="range" id="inp-compass" min="0" max="359" step="1" value="${state.compass ?? 0}" style="width:80px"></label>
         <label title="太陽の時刻"><span id="sunhour-label">${sunHourLabel(state.sunHour ?? 12)}</span><input type="range" id="inp-sunhour" min="6" max="18" step="0.5" value="${state.sunHour ?? 12}" style="width:60px"></label>
+        <button id="btn-sunlight" class="btn-sunlight" title="採光オーバーレイを2Dグリッドに表示">採光表示</button>
       </div>
     </div>
   `;
@@ -128,6 +129,7 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     document.getElementById('sunhour-label').textContent = sunHourLabel(state.sunHour);
     onCompassChange?.();
   });
+  document.getElementById('btn-sunlight').addEventListener('click', () => onSunlightToggle?.());
 
   // ── キーボードショートカット ──────────────────────────
   document.addEventListener('keydown', e => {
@@ -165,6 +167,9 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     syncWallColor(color) {
       const el = document.getElementById('wall-color-pick');
       if (el) el.value = color ?? '#1e293b';
+    },
+    setSunlight(visible) {
+      document.getElementById('btn-sunlight')?.classList.toggle('btn-sunlight-active', visible);
     },
   };
 }

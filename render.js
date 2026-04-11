@@ -9,6 +9,7 @@ import { getFurnitureTypeById } from './furniture.js';
 import { getLandscapeTypeById } from './landscape.js';
 import { pushUndo } from './undo.js';
 import { saveProject } from './storage.js';
+import { calcSunlightScores, renderSunlightOverlay } from './sunlight.js';
 import { createDragHandler } from './drag.js';
 import { canPlaceCells, placeRoomCells, removeRoom } from './grid.js';
 import { isRectRoom, updateIrregularRoomBounds, translateCells } from './room-utils.js';
@@ -45,12 +46,28 @@ export function applyGridCss() {
     ui.paintCanvas.width  = state.gridCols * cs;
     ui.paintCanvas.height = state.gridRows * cs;
   }
+  if (ui.sunlightCanvas) {
+    ui.sunlightCanvas.width  = state.gridCols * cs;
+    ui.sunlightCanvas.height = state.gridRows * cs;
+  }
 }
 
 // ── 土地レイヤー ───────────────────────────────────────────────
 export function renderLandLayer() {
   if (!ui.landSvg) return;
   renderLand(ui.landSvg, state.land, state.cellSize, state.gridCols, state.gridRows, ui.landPreview);
+}
+
+// ── 採光オーバーレイ ───────────────────────────────────────────
+export function renderSunlightLayer() {
+  if (!ui.sunlightCanvas) return;
+  const ctx = ui.sunlightCanvas.getContext('2d');
+  if (!ui.sunlightVisible) {
+    ctx.clearRect(0, 0, ui.sunlightCanvas.width, ui.sunlightCanvas.height);
+    return;
+  }
+  const scores = calcSunlightScores(state, ui.grid);
+  renderSunlightOverlay(ui.sunlightCanvas, scores, state.rooms, state.cellSize);
 }
 
 // ── コンパスインジケーター ──────────────────────────────────────

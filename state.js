@@ -67,4 +67,7 @@ export const ui = {
   selectedElementKey: null,
   // 外構
   selectedLandscapeId: null,
+  // 採光オーバーレイ
+  sunlightVisible: false,
+  sunlightCanvas: null,
 };
