@@ -146,7 +146,7 @@ function _bindEvents() {
     _overlay.querySelector('#pm-btn-new').hidden  = false;
   });
   _overlay.querySelector('#pm-new-name').addEventListener('keydown', e => {
-    if (e.key === 'Enter')  { e.preventDefault(); _createNewProject(); }
+    if (e.key === 'Enter' && !e.isComposing)  { e.preventDefault(); _createNewProject(); }
     if (e.key === 'Escape') {
       _overlay.querySelector('#pm-new-form').hidden = true;
       _overlay.querySelector('#pm-btn-new').hidden  = false;
@@ -207,7 +207,7 @@ function _startRename(id) {
   };
   input.addEventListener('blur',   commit);
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter')  { e.preventDefault(); input.removeEventListener('blur', commit); commit(); }
+    if (e.key === 'Enter' && !e.isComposing)  { e.preventDefault(); input.removeEventListener('blur', commit); commit(); }
     if (e.key === 'Escape') { input.removeEventListener('blur', commit); _renderModal(); }
   });
 }
