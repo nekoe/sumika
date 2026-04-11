@@ -1,10 +1,14 @@
 // ツールバーUI（2行コンパクトレイアウト）
 
-export function initToolbar({ container, state, onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onSunlightToggle, onRotate, onPrint, onExportSVG, onExportPNG }) {
+export function initToolbar({ container, state, projectName = '', onUndo, onRedo, onGridChange, onSave, onExport, onImport, onReset, onModeChange, onFloorChange, onWalkthrough, onCompassChange, onSunlightToggle, onRotate, onPrint, onExportSVG, onExportPNG, onProjectManager }) {
 
   container.innerHTML = `
     <!-- Row 1: メイン操作 -->
     <div class="tb-primary">
+      <div class="tb-group">
+        <button id="btn-project" class="btn-project" title="プロジェクト管理">📁 <span id="project-name">${_esc(projectName)}</span> ▾</button>
+      </div>
+      <div class="tb-sep"></div>
       <div class="tb-group">
         <button id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>↩</button>
         <button id="btn-redo" title="やり直す (Ctrl+Y)" disabled>↪</button>
@@ -62,6 +66,9 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
       </div>
     </div>
   `;
+
+  // ── プロジェクト管理 ──────────────────────────────────
+  document.getElementById('btn-project').addEventListener('click', () => onProjectManager?.());
 
   // ── undo/redo ─────────────────────────────────────────
   document.getElementById('btn-undo').addEventListener('click', onUndo);
@@ -171,7 +178,19 @@ export function initToolbar({ container, state, onUndo, onRedo, onGridChange, on
     setSunlight(visible) {
       document.getElementById('btn-sunlight')?.classList.toggle('btn-sunlight-active', visible);
     },
+    syncProjectName(name) {
+      const el = document.getElementById('project-name');
+      if (el) el.textContent = name;
+    },
   };
+}
+
+function _esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function compassLabel(deg) {

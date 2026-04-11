@@ -4,7 +4,10 @@ import { state, ui, AUTOSAVE_INTERVAL } from './state.js';
 import { createGrid, rebuildGrid, canPlace, canPlaceCells, placeRoomCells, removeRoom } from './grid.js';
 import { renderPalette, createRoomData, getTypeById } from './rooms.js';
 import { initDnd } from './dnd.js';
-import { saveProject, loadProject, exportJSON, importJSON, resetProject } from './storage.js';
+import { saveProject, exportJSON, importJSON,
+         setCurrentProjectId, loadProjectIndex, loadProjectData,
+         createProject, loadLegacyProject, removeLegacyKeys } from './storage.js';
+import { initProjectManager, openProjectModal } from './project-manager.js';
 import { initToolbar } from './toolbar.js';
 import { initWallLayer, renderWallLayer, ELEMENT_TOOLS } from './walls.js';
 import { startWalkthrough } from './walkthrough.js';
@@ -266,9 +269,32 @@ function handleGridChange({ gridCols, gridRows, cellSize }) {
 // DOMContentLoaded
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // プロジェクトデータ読み込み
-  const saved = loadProject();
-  if (saved) applyProjectData(saved);
+  // ── プロジェクトマイグレーション＆初期読み込み ────────────────
+  let _initialProjectName = '間取り 1';
+  const _index = loadProjectIndex();
+  if (_index.length === 0) {
+    // 初回起動 or 旧形式データの移行
+    const legacy = loadLegacyProject();
+    if (legacy) {
+      // 旧データが存在 → 名前付きプロジェクトとして移行
+      _initialProjectName = '間取り 1';
+      applyProjectData(legacy);
+    }
+    const firstId = createProject(_initialProjectName);
+    setCurrentProjectId(firstId);
+    ui.currentProjectId = firstId;
+    saveProject(state);
+    removeLegacyKeys();
+  } else {
+    // 既存プロジェクト → 最後に更新されたものを開く
+    const sorted = [..._index].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const first  = sorted[0];
+    _initialProjectName = first.name;
+    setCurrentProjectId(first.id);
+    ui.currentProjectId = first.id;
+    const data = loadProjectData(first.id);
+    if (data) applyProjectData(data);
+  }
 
   // グリッド初期化
   ui.grid = createGrid(state.gridCols, state.gridRows);
@@ -325,6 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.grid = createGrid(state.gridCols, state.gridRows);
     rebuildGrid(ui.grid, state.rooms);
     renderAll();
+    renderCompassIndicator();
     ui.toolbar?.syncSliders(state);
     ui.toolbar?.syncFloor(state.currentFloor);
     ui.toolbar?.syncWallColor(state.wallColor);
@@ -338,8 +365,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── ツールバー ───────────────────────────────────────────
   ui.toolbar = initToolbar({
-    container:    document.getElementById('toolbar'),
+    container:      document.getElementById('toolbar'),
     state,
+    projectName:    _initialProjectName,
+    onProjectManager: () => openProjectModal(),
     onUndo:       () => undo(undoCallback),
     onRedo:       () => redo(undoCallback),
     onGridChange: handleGridChange,
@@ -351,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
       resetUndoRedo();
       applyProjectData(data);
       rebuildAndSync();
-      renderCompassIndicator();
+      saveProject(state);
       showToast('読み込みました');
     }, msg => alert(msg)),
     onRotate:     dir => rotateFloorPlan(dir > 0),
@@ -373,9 +402,10 @@ document.addEventListener('DOMContentLoaded', () => {
       ];
       state.currentFloor = 0;
       state.landscape = [];
+      state.land = { points: [], closed: false };
       ui.multiSelected = new Set();
       ui.selectedLandscapeId = null;
-      resetProject();
+      saveProject(state);
       ui.grid = createGrid(state.gridCols, state.gridRows);
       rebuildGrid(ui.grid, state.rooms);
       renderAll();
@@ -394,6 +424,9 @@ document.addEventListener('DOMContentLoaded', () => {
     onDropStair:      handleStairDropNew,
     onDropLandscape:  handleLandscapeDropNew,
   });
+
+  // ── プロジェクトマネージャー初期化 ─────────────────────────
+  initProjectManager({ applyProjectData, rebuildAndSync, showToast });
 
   // ── コンテキストメニュー初期化 ─────────────────────────────
   initContextMenu({ renderAll, renderFurniture, renderLandscape, renderStairs, updateInspector, handleModeChange, showToast });

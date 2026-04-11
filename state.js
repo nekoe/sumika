@@ -70,4 +70,6 @@ export const ui = {
   // 採光オーバーレイ
   sunlightVisible: false,
   sunlightCanvas: null,
+  // プロジェクト管理
+  currentProjectId: null,
 };
