@@ -5,6 +5,7 @@ import { pushUndo } from './undo.js';
 import { saveProject } from './storage.js';
 import { ELEMENT_TOOLS, renderWallLayer } from './walls.js';
 import { getTypeById, calcAreaCells, CELL_M } from './rooms.js';
+import { FLOOR_MATERIALS } from './materials.js';
 import { getFurnitureTypeById } from './furniture.js';
 import { getLandscapeTypeById } from './landscape.js';
 import { selectAll, clearMultiSelected } from './selection.js';
@@ -487,6 +488,19 @@ function renderIrregularRoomInspector(panel, room) {
       <label>アイコン</label>
       <div class="icon-picker">${iconBtns}</div>
     </div>
+    <div class="inspector-field" style="flex-direction:column;align-items:flex-start;gap:4px">
+      <label>床材（3D）</label>
+      <div class="mat-btns">
+        ${FLOOR_MATERIALS.map(m =>
+          `<button class="mat-btn${(room.floorMaterial ?? 'auto') === m.id ? ' active' : ''}" data-mat="${m.id}">${m.label}</button>`
+        ).join('')}
+      </div>
+    </div>
+    <div class="inspector-field">
+      <label title="3Dウォークスルーでの壁の色">壁色（3D）</label>
+      <input type="color" id="inp-room-wall-color" value="${room.wallColor ?? '#f2ede6'}" ${room.wallColor ? '' : 'style="opacity:0.45"'}>
+      <button id="btn-room-wall-color-reset" class="btn-icon" title="グローバル設定に戻す" ${room.wallColor ? '' : 'disabled'}>↩</button>
+    </div>
     <div class="inspector-field">
       <label for="inp-isdoma" title="土間：床を15cm下げて段差を描画">土間（床下げ）</label>
       <input type="checkbox" id="inp-isdoma" ${room.isDoma ? 'checked' : ''}>
@@ -523,6 +537,35 @@ function renderIrregularRoomInspector(panel, room) {
     _renderAll?.();
     updateInspector();
   });
+  // 床材ボタン
+  panel.querySelectorAll('.mat-btn[data-mat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pushUndo();
+      room.floorMaterial = btn.dataset.mat === 'auto' ? undefined : btn.dataset.mat;
+      saveProject(state);
+      panel.querySelectorAll('.mat-btn').forEach(b => b.classList.toggle('active', b.dataset.mat === (room.floorMaterial ?? 'auto')));
+    });
+  });
+
+  // 壁色（3D）
+  const wallColorInput = document.getElementById('inp-room-wall-color');
+  const wallColorReset = document.getElementById('btn-room-wall-color-reset');
+  wallColorInput.addEventListener('change', () => {
+    pushUndo();
+    room.wallColor = wallColorInput.value;
+    wallColorInput.style.opacity = '1';
+    wallColorReset.disabled = false;
+    saveProject(state);
+  });
+  wallColorReset.addEventListener('click', () => {
+    pushUndo();
+    room.wallColor = undefined;
+    wallColorInput.value = '#f2ede6';
+    wallColorInput.style.opacity = '0.45';
+    wallColorReset.disabled = true;
+    saveProject(state);
+  });
+
   document.getElementById('btn-delete-room').addEventListener('click', () => {
     if (ui.editingRoomId === room.id) ui.editingRoomId = null;
     pushUndo();

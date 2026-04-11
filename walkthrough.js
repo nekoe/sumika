@@ -561,6 +561,45 @@ function makeFloorTexture(typeId) {
       ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, SZ); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(SZ, i); ctx.stroke();
     }
+  } else if (typeId === 'carpet') {
+    // カーペット: ベージュ系のループパイル模様
+    ctx.fillStyle = '#d4c8be';
+    ctx.fillRect(0, 0, SZ, SZ);
+    const rng = mulberry32(99);
+    for (let i = 0; i < 3000; i++) {
+      const px = rng() * SZ, py = rng() * SZ;
+      const r  = rng() * 1.5 + 0.3;
+      const b  = Math.floor(rng() * 30) - 15;
+      const base = 188 + b;
+      ctx.fillStyle = `rgba(${base},${base - 8},${base - 16},0.65)`;
+      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (typeId === 'marble') {
+    // 大理石: 白地に薄いグレーのベイン（筋）
+    ctx.fillStyle = '#f5f3f0';
+    ctx.fillRect(0, 0, SZ, SZ);
+    const rng = mulberry32(77);
+    for (let v = 0; v < 8; v++) {
+      ctx.strokeStyle = `rgba(180,175,168,${0.25 + rng() * 0.45})`;
+      ctx.lineWidth = rng() * 2.5 + 0.5;
+      ctx.beginPath();
+      const sx = rng() * SZ, sy = rng() * SZ;
+      ctx.moveTo(sx, sy);
+      ctx.bezierCurveTo(
+        sx + rng() * 80 - 40, sy + rng() * 80 - 40,
+        sx + rng() * 80 - 20, sy + rng() * 80,
+        sx + (rng() - 0.5) * SZ, sy + rng() * SZ,
+      );
+      ctx.stroke();
+    }
+    // 目地線（正方形タイル）
+    ctx.strokeStyle = 'rgba(180,175,168,0.3)';
+    ctx.lineWidth = 1;
+    const TILE = 128;
+    for (let i = 0; i <= SZ; i += TILE) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, SZ); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(SZ, i); ctx.stroke();
+    }
   } else {
     // フローリング: 木目の板（ldk, living, dining, kitchen, bedroom, child, study, corridor, storage, balcony, custom など）
     const PLANK_W = SZ / 3;
@@ -641,7 +680,8 @@ function generateFloors(scene, rooms, baseY) {
     if (r.typeId === 'void') continue;
     const isDoma = r.isDoma ?? (r.typeId === 'doma' || r.typeId === 'genkan');
     const floorY = isDoma ? baseY - DOMA_DROP : baseY;
-    const texTypeId = isDoma ? (r.typeId || 'doma') : r.typeId;
+    const matOverride = r.floorMaterial && r.floorMaterial !== 'auto' ? r.floorMaterial : null;
+    const texTypeId = isDoma ? (r.typeId || 'doma') : (matOverride ?? r.typeId);
     const tex = makeFloorTexture(texTypeId);
     const mat = new THREE.MeshLambertMaterial({ map: tex });
     if (r.cells) {
@@ -1298,8 +1338,28 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
   });
   const doorMat  = new THREE.MeshLambertMaterial({ color: 0xc8a870 });
   const matCache = new Map();
-  function getElWallMat(el) {
-    if (!el?.color) return wallMat;
+
+  // セル→部屋壁色マップ（per-room壁色設定用）
+  const cellToRoomWallColor = new Map();
+  for (const r of rooms) {
+    if (!r.wallColor) continue;
+    if (r.cells) {
+      for (const key of r.cells) cellToRoomWallColor.set(key, r.wallColor);
+    } else {
+      for (let row = r.y; row < r.y + r.h; row++)
+        for (let col = r.x; col < r.x + r.w; col++)
+          cellToRoomWallColor.set(`${col},${row}`, r.wallColor);
+    }
+  }
+  function getRoomWallMat(color) {
+    if (matCache.has(color)) return matCache.get(color);
+    const c = parseInt(color.replace('#', ''), 16);
+    const m = new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.35 });
+    matCache.set(color, m);
+    return m;
+  }
+  function getElWallMat(el, fallback = wallMat) {
+    if (!el?.color) return fallback;
     if (matCache.has(el.color)) return matCache.get(el.color);
     const c = parseInt(el.color.replace('#', ''), 16);
     const m = new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.35 });
@@ -1340,7 +1400,10 @@ function generateWalls(scene, floorState, baseY, belowVoidCells = new Set(), low
     const needsFullHeight = voidCells.has(cellA) || voidCells.has(cellB)
                           || aboveVoidCells.has(cellA) || aboveVoidCells.has(cellB);
     const wallTop = needsFullHeight ? baseY + FLOOR_H : baseY + WALL_H;
-    const eMat = getElWallMat(el);
+    // ownCell の部屋壁色が設定されていればそれを使う（グローバル壁色より優先）
+    const roomWallColorVal = cellToRoomWallColor.get(ownCell);
+    const baseMat = roomWallColorVal ? getRoomWallMat(roomWallColorVal) : wallMat;
+    const eMat = getElWallMat(el, baseMat);
     if (type === 'door') {
       addDoorGeometry(scene, doorMat, eMat, dir, col, row, el?.flip || false, wallSegs, doorMap, wallY0, wallTop);
     } else if (type === 'slide_door') {

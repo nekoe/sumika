@@ -1250,6 +1250,25 @@ body {
 .furniture-block.selected .resize-handle,
 .furniture-block:hover .resize-handle { opacity: 1; }
 
+/* 床材ボタン（インスペクター） */
+.mat-btns {
+  display: flex; flex-wrap: wrap; gap: 4px;
+}
+.mat-btn {
+  padding: 3px 7px; font-size: 11px; border: 1px solid var(--color-border);
+  border-radius: 4px; background: var(--color-panel); cursor: pointer; white-space: nowrap;
+}
+.mat-btn:hover { background: var(--color-bg); }
+.mat-btn.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+
+/* アイコンボタン（ワンアクション用小ボタン） */
+.btn-icon {
+  padding: 0 7px; height: 28px; font-size: 13px; border: 1px solid var(--color-border);
+  border-radius: 4px; background: var(--color-panel); cursor: pointer;
+}
+.btn-icon:hover:not(:disabled) { background: var(--color-bg); }
+.btn-icon:disabled { opacity: 0.35; cursor: default; }
+
 /* 方向ボタン（インスペクター） */
 .furn-dir-btns { display: flex; gap: 4px; }
 .furn-dir-btn {
