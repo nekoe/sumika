@@ -1479,6 +1479,56 @@ body {
 }
 #print-header .print-date { color: #94a3b8; }
 
+/* ============================================================
+   コンテキストメニュー
+   ============================================================ */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  min-width: 160px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.context-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.context-menu li {
+  padding: 7px 16px;
+  cursor: pointer;
+  color: #1e293b;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.context-menu li:hover {
+  background: #f1f5f9;
+}
+
+.context-menu li.ctx-danger {
+  color: #dc2626;
+}
+
+.context-menu li.ctx-danger:hover {
+  background: #fef2f2;
+}
+
+.context-menu li.ctx-sep {
+  height: 1px;
+  background: #e2e8f0;
+  padding: 0;
+  margin: 4px 0;
+  cursor: default;
+  pointer-events: none;
+}
+
 @media print {
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 

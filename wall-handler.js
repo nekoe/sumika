@@ -8,6 +8,7 @@ import { getEdgeAt, edgeKey, renderWallLayer } from './walls.js';
 // initWallHandlers で設定されるコールバック（モジュールスコープで保持）
 let _updateInspector = () => {};
 let _getGridEl = () => null;
+let _onContextMenu = null;
 
 // 壁ドラッグ描画の状態
 let wallDragging = false;
@@ -17,9 +18,10 @@ let wallDragStartY = 0;
 let wallDragPreviewEdges = [];
 let dragJustCommitted = false;
 
-export function initWallHandlers(svgEl, { getGridEl, updateInspector }) {
+export function initWallHandlers(svgEl, { getGridEl, updateInspector, onContextMenu }) {
   _updateInspector = updateInspector;
   _getGridEl = getGridEl;
+  _onContextMenu = onContextMenu ?? null;
 
   // ── mousedown ──
   svgEl.addEventListener('mousedown', e => {
@@ -147,21 +149,19 @@ export function initWallHandlers(svgEl, { getGridEl, updateInspector }) {
     handleElementClick(edge, svgEl);
   });
 
-  // ── contextmenu: ドアflip ──
+  // ── contextmenu: コンテキストメニューへ委譲 ──
   svgEl.addEventListener('contextmenu', e => {
     e.preventDefault();
-    if (state.mode !== 'door') return;
-    const edge = getEdgeAt(e, _getGridEl(), state.cellSize);
-    if (!edge) return;
-    const key = edgeKey(edge.col, edge.row, edge.dir);
-    const el = state.elements.find(el => edgeKey(el.col, el.row, el.dir) === key && el.type === 'door');
-    if (el) {
-      pushUndo();
-      el.flip = !el.flip;
-      renderWallLayer(svgEl, state.elements, state.cellSize, state.gridCols, state.gridRows,
-        ui.hoveredEdge, state.mode, ui.selectedElementKey);
-      saveProject(state);
+    if (!_onContextMenu) return;
+    let doorEl = null;
+    if (state.mode === 'door') {
+      const edge = getEdgeAt(e, _getGridEl(), state.cellSize);
+      if (edge) {
+        const key = edgeKey(edge.col, edge.row, edge.dir);
+        doorEl = state.elements.find(el => edgeKey(el.col, el.row, el.dir) === key && el.type === 'door') ?? null;
+      }
     }
+    _onContextMenu(e, svgEl, doorEl);
   });
 }
 

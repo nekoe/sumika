@@ -18,6 +18,7 @@ import { initSelection, selectRoom, selectAll, toggleMultiSelect, clearMultiSele
 import { initPaletteRenderer, renderElementPalette, renderStairPalette, renderFurniturePalette, renderLandscapePalette } from './palette-renderer.js';
 import { initLandHandlers } from './land-handler.js';
 import { initWallHandlers } from './wall-handler.js';
+import { initContextMenu, showContextMenu } from './context-menu.js';
 import { initCellEditHandlers } from './cell-edit-handler.js';
 import { getFurnitureTypeById } from './furniture.js';
 import { getLandscapeTypeById } from './landscape.js';
@@ -394,9 +395,16 @@ document.addEventListener('DOMContentLoaded', () => {
     onDropLandscape:  handleLandscapeDropNew,
   });
 
+  // ── コンテキストメニュー初期化 ─────────────────────────────
+  initContextMenu({ renderAll, renderFurniture, renderLandscape, renderStairs, updateInspector, handleModeChange, showToast });
+
   // ── イベントハンドラ（各モジュールへ委譲）───────────────
   initLandHandlers(document.getElementById('grid'), { renderLandLayer });
-  initWallHandlers(ui.svgEl, { getGridEl: () => document.getElementById('grid'), updateInspector });
+  initWallHandlers(ui.svgEl, {
+    getGridEl: () => document.getElementById('grid'),
+    updateInspector,
+    onContextMenu: (e, svgEl, doorEl) => showContextMenu(e, svgEl, doorEl),
+  });
   initCellEditHandlers(document.getElementById('grid'), {
     renderAll, renderPaintPreview, getGrid: () => ui.grid,
   });
