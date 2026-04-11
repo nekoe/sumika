@@ -23,7 +23,8 @@ wall-handler.js     壁・建具のマウスイベント処理
 context-menu.js     右クリックコンテキストメニュー（部屋/家具/階段/外構/ドア対応）
 walkthrough.js      Three.js 3D シーン（採光・家具3Dモデル・階段含む、約1200行）
 export.js           SVG / PNG / PDF 出力
-storage.js          localStorage 保存・読込・バージョン移行（現行 v3）
+storage.js          マルチプロジェクト CRUD・シリアライズ・旧形式マイグレーション
+project-manager.js  プロジェクト管理モーダルUI（作成・切替・リネーム・複製・削除・ソート）
 undo.js             JSON スナップショット方式の Undo/Redo
 grid.js             配置衝突判定（DOM 非依存の純粋ロジック）
 rooms.js            部屋タイプ定義・createRoomData・面積計算
@@ -52,13 +53,14 @@ state.landscape          // 全フロア共通
 
 ### ui（非永続・一時UI状態）
 ```js
-ui.grid          // 2D配列でセル占有を管理（roomId | null）
-ui.svgEl         // 壁レイヤーSVG
+ui.grid              // 2D配列でセル占有を管理（roomId | null）
+ui.svgEl             // 壁レイヤーSVG
 ui.selectedId / selectedStairId / selectedFurnitureId / selectedLandscapeId
-ui.multiSelected // Set<id>
-ui.hoveredEdge   // 壁モード時のホバー辺
+ui.multiSelected     // Set<id>
+ui.hoveredEdge       // 壁モード時のホバー辺
 ui.eraserDragging
 ui.selectedElementKey
+ui.currentProjectId  // 現在編集中のプロジェクトID（storage.js の _currentProjectId と同期）
 ```
 
 ## データ構造
@@ -134,6 +136,31 @@ saveProject(state);  // localStorage に保存
 - **家具**: 9種（kitchen/chair/table/washer/sink/fridge/sofa/lowtable/custom）
 - **外構**: 4種（駐車場/庭・芝生/植栽・樹木/テラス）
 - **床材**: 7種（auto/flooring/tile/tatami/mortar/carpet/marble）— `materials.js` で管理
+
+## マルチプロジェクトの実装規約
+
+### localStorage キー体系
+```
+sumika-projects-index        [{id, name, createdAt, updatedAt}]  プロジェクト一覧
+sumika-project-{id}          プロジェクトデータ本体（v3 フォーマット）
+```
+旧キー `sumika-project-v3` は起動時に自動マイグレーションして削除される。
+
+### saveProject の挙動
+`saveProject(state)` は `storage.js` 内部の `_currentProjectId` を使って `sumika-project-{id}` へ保存する。
+呼び出し側のシグネチャは変わらないため、既存の全モジュールは修正不要。
+
+`setCurrentProjectId(id)` と `ui.currentProjectId = id` を必ずセットで更新すること。
+
+### 未保存変更チェック
+`hasUnsavedChanges(state)` は最後の `saveProject` 時の JSON スナップショット（`_lastSavedJSON`）と現在の `_serializeState(state)` を比較する。
+一度も保存できていない場合は `true` を返す（安全側フォールバック）。
+
+### IME 入力フォームの規約
+テキスト入力の `keydown` で Enter 確定する場合は `e.isComposing` チェックを必ず行う。
+```js
+if (e.key === 'Enter' && !e.isComposing) { /* 確定処理 */ }
+```
 
 ## 既知の制約
 
