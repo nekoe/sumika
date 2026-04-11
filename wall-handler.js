@@ -23,6 +23,24 @@ export function initWallHandlers(svgEl, { getGridEl, updateInspector, onContextM
   _getGridEl = getGridEl;
   _onContextMenu = onContextMenu ?? null;
 
+  // ── contextmenu: グリッドコンテナで捕捉（SVGがpointer-events:noneの場合も含む）──
+  const gridEl = getGridEl();
+  if (gridEl) {
+    gridEl.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (!_onContextMenu) return;
+      let doorEl = null;
+      if (state.mode === 'door') {
+        const edge = getEdgeAt(e, gridEl, state.cellSize);
+        if (edge) {
+          const key = edgeKey(edge.col, edge.row, edge.dir);
+          doorEl = state.elements.find(el => edgeKey(el.col, el.row, el.dir) === key && el.type === 'door') ?? null;
+        }
+      }
+      _onContextMenu(e, svgEl, doorEl);
+    });
+  }
+
   // ── mousedown ──
   svgEl.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
@@ -149,20 +167,6 @@ export function initWallHandlers(svgEl, { getGridEl, updateInspector, onContextM
     handleElementClick(edge, svgEl);
   });
 
-  // ── contextmenu: コンテキストメニューへ委譲 ──
-  svgEl.addEventListener('contextmenu', e => {
-    e.preventDefault();
-    if (!_onContextMenu) return;
-    let doorEl = null;
-    if (state.mode === 'door') {
-      const edge = getEdgeAt(e, _getGridEl(), state.cellSize);
-      if (edge) {
-        const key = edgeKey(edge.col, edge.row, edge.dir);
-        doorEl = state.elements.find(el => edgeKey(el.col, el.row, el.dir) === key && el.type === 'door') ?? null;
-      }
-    }
-    _onContextMenu(e, svgEl, doorEl);
-  });
 }
 
 // ── ヘルパー関数 ─────────────────────────────────────────────
