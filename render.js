@@ -404,9 +404,11 @@ export function renderFurniture() {
     div.dataset.x  = furn.x; div.dataset.y = furn.y;
     div.dataset.w  = furn.w; div.dataset.h = furn.h;
     div.style.cssText = `left:${furn.x*cs}px;top:${furn.y*cs}px;width:${furn.w*cs}px;height:${furn.h*cs}px;background-color:${displayColor};`;
+    const dirArrow = { n: '▲', s: '▼', e: '▶', w: '◀' }[furn.dir ?? 's'] ?? '▼';
     div.innerHTML = `
       <span class="furn-icon">${displayIcon}</span>
-      <span class="furn-label">${displayLabel}</span>`;
+      <span class="furn-label">${displayLabel}</span>
+      <span class="furn-dir-arrow">${dirArrow}</span>`;
 
     div.addEventListener('click', e => {
       if (e.target.closest('.resize-handle')) return;

@@ -335,6 +335,17 @@ function renderFurnitureInspector(panel, furn) {
         <label class="inspector-label">色</label>
         <input id="furn-insp-color" type="color" value="${color}" style="width:44px;height:28px;padding:0;border:none;cursor:pointer">
       </div>
+      <div class="inspector-row">
+        <label class="inspector-label">向き</label>
+        <div class="furn-dir-btns">
+          ${['n','s','e','w'].map(d => {
+            const arrow = { n:'▲', s:'▼', e:'▶', w:'◀' }[d];
+            const label = { n:'北', s:'南', e:'東', w:'西' }[d];
+            const active = (furn.dir ?? 's') === d ? ' active' : '';
+            return `<button class="furn-dir-btn${active}" data-dir="${d}" title="${label}">${arrow}</button>`;
+          }).join('')}
+        </div>
+      </div>
     </div>
     <button id="fi-delete" class="btn-danger btn-full" style="margin-top:8px">家具を削除</button>`;
 
@@ -348,6 +359,16 @@ function renderFurnitureInspector(panel, furn) {
     renderFurnitureInspector(panel, furn);
     saveProject(state);
   };
+
+  panel.querySelectorAll('.furn-dir-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pushUndo();
+      furn.dir = btn.dataset.dir;
+      _renderFurniture?.();
+      renderFurnitureInspector(panel, furn);
+      saveProject(state);
+    });
+  });
 
   panel.querySelector('#furn-insp-label').addEventListener('change', commit);
   panel.querySelector('#furn-insp-icon').addEventListener('change', commit);

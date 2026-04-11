@@ -963,21 +963,48 @@ function addStairHandrails(scene, stair, baseY) {
 // ─────────────────────────────────────────────────────────
 // 家具ジオメトリ生成
 // ─────────────────────────────────────────────────────────
+// 向き(dir)→Y軸回転角。各gen関数のデフォルト正面は +Z 方向（南向き = 's'）
+const DIR_ROTATION_Y = { s: 0, n: Math.PI, e: -Math.PI / 2, w: Math.PI / 2 };
+
 function generateFurnitureItems(scene, furniture, baseY) {
   for (const f of furniture) {
     const x  = f.x * CELL;
     const z  = f.y * CELL;
     const fw = f.w * CELL;
     const fd = f.h * CELL;
-    switch (f.typeId) {
-      case 'kitchen': genKitchen(scene, x, z, fw, fd, baseY); break;
-      case 'bath':    genBath(scene, x, z, fw, fd, baseY); break;
-      case 'toilet':  genToilet(scene, x, z, fw, fd, baseY); break;
-      case 'chair':   genChair(scene, x, z, fw, fd, baseY); break;
-      case 'table':   genTable(scene, x, z, fw, fd, baseY); break;
-      case 'washer':  genWasher(scene, x, z, fw, fd, baseY); break;
-      case 'sink':    genSink(scene, x, z, fw, fd, baseY); break;
-      case 'fridge':  genFridge(scene, x, z, fw, fd, baseY); break;
+    const dir = f.dir ?? 's';
+    const rotY = DIR_ROTATION_Y[dir] ?? 0;
+
+    // 回転がない場合はそのままsceneに描画
+    if (rotY === 0) {
+      switch (f.typeId) {
+        case 'kitchen': genKitchen(scene, x, z, fw, fd, baseY); break;
+        case 'bath':    genBath(scene, x, z, fw, fd, baseY); break;
+        case 'toilet':  genToilet(scene, x, z, fw, fd, baseY); break;
+        case 'chair':   genChair(scene, x, z, fw, fd, baseY); break;
+        case 'table':   genTable(scene, x, z, fw, fd, baseY); break;
+        case 'washer':  genWasher(scene, x, z, fw, fd, baseY); break;
+        case 'sink':    genSink(scene, x, z, fw, fd, baseY); break;
+        case 'fridge':  genFridge(scene, x, z, fw, fd, baseY); break;
+      }
+    } else {
+      // GroupでY軸回転: 家具を中心(0,0,0)基準で生成してから回転・移動
+      const group = new THREE.Group();
+      const cx = x + fw / 2, cz = z + fd / 2;
+      // gen関数には中心からのオフセットを渡す（ox=-fw/2, oz=-fd/2）
+      switch (f.typeId) {
+        case 'kitchen': genKitchen(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'bath':    genBath(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'toilet':  genToilet(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'chair':   genChair(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'table':   genTable(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'washer':  genWasher(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'sink':    genSink(group, -fw/2, -fd/2, fw, fd, baseY); break;
+        case 'fridge':  genFridge(group, -fw/2, -fd/2, fw, fd, baseY); break;
+      }
+      group.rotation.y = rotY;
+      group.position.set(cx, 0, cz);
+      scene.add(group);
     }
   }
 }

@@ -215,7 +215,7 @@ function handleFurnitureDropNew(typeId, col, row) {
   const x = Math.min(Math.max(0, col), state.gridCols - ftype.defaultW);
   const y = Math.min(Math.max(0, row), state.gridRows - ftype.defaultH);
   pushUndo();
-  const newFurn = { id: `furn-${Date.now()}`, typeId: ftype.id, x, y, w: ftype.defaultW, h: ftype.defaultH };
+  const newFurn = { id: `furn-${Date.now()}`, typeId: ftype.id, x, y, w: ftype.defaultW, h: ftype.defaultH, dir: 's' };
   state.furniture.push(newFurn);
   ui.selectedFurnitureId = newFurn.id;
   if (state.mode !== 'furniture') { handleModeChange('furniture'); ui.toolbar?.setMode('furniture'); }

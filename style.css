@@ -1215,8 +1215,22 @@ body {
 .furniture-block.dragging { opacity: .5; }
 .furn-icon  { font-size: 18px; line-height: 1; pointer-events: none; }
 .furn-label { font-size: 10px; font-weight: 600; color: rgba(0,0,0,.7); pointer-events: none; white-space: nowrap; }
+.furn-dir-arrow {
+  position: absolute; bottom: 2px; right: 3px;
+  font-size: 9px; color: rgba(0,0,0,.45); pointer-events: none; line-height: 1;
+}
 .furniture-block.selected .resize-handle,
 .furniture-block:hover .resize-handle { opacity: 1; }
+
+/* 方向ボタン（インスペクター） */
+.furn-dir-btns { display: flex; gap: 4px; }
+.furn-dir-btn {
+  width: 28px; height: 28px; border: 1px solid var(--color-border);
+  border-radius: 4px; background: var(--color-panel); cursor: pointer;
+  font-size: 11px; display: flex; align-items: center; justify-content: center;
+}
+.furn-dir-btn:hover { background: var(--color-bg); }
+.furn-dir-btn.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
 
 #grid[data-mode="furniture"] { cursor: default; }
 #grid[data-mode="furniture"] .room-block { pointer-events: none; }
