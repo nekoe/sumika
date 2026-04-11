@@ -15,22 +15,25 @@ ES Modules を使用しているため、ファイルを直接ブラウザで開
 ## アーキテクチャ概要
 
 ```
-app.js          オーケストレーター。全モジュールを初期化しコールバックで配線する
-state.js        シングルトン状態。永続化対象の state と UI 一時状態の ui を分離
-render.js       DOM 描画（部屋・家具・階段・外構）
-walls.js        壁・建具の SVG レイヤー描画
-wall-handler.js 壁・建具のマウスイベント処理
-walkthrough.js  Three.js 3D シーン（採光・家具3Dモデル・階段含む、約1200行）
-export.js       SVG / PNG / PDF 出力
-storage.js      localStorage 保存・読込・バージョン移行（現行 v3）
-undo.js         JSON スナップショット方式の Undo/Redo
-grid.js         配置衝突判定（DOM 非依存の純粋ロジック）
-rooms.js        部屋タイプ定義・createRoomData・面積計算
-inspector.js    選択状態に応じた右パネル差し替え
-toolbar.js      2行ツールバー生成
+app.js              オーケストレーター。全モジュールを初期化しコールバックで配線する
+state.js            シングルトン状態。永続化対象の state と UI 一時状態の ui を分離
+render.js           DOM 描画（部屋・家具・階段・外構）
+walls.js            壁・建具の SVG レイヤー描画
+wall-handler.js     壁・建具のマウスイベント処理
+context-menu.js     右クリックコンテキストメニュー（部屋/家具/階段/外構/ドア対応）
+walkthrough.js      Three.js 3D シーン（採光・家具3Dモデル・階段含む、約1200行）
+export.js           SVG / PNG / PDF 出力
+storage.js          localStorage 保存・読込・バージョン移行（現行 v3）
+undo.js             JSON スナップショット方式の Undo/Redo
+grid.js             配置衝突判定（DOM 非依存の純粋ロジック）
+rooms.js            部屋タイプ定義・createRoomData・面積計算
+materials.js        床材マスタ定義（FLOOR_MATERIALS・getFloorMaterialLabel）
+inspector.js        選択状態に応じた右パネル差し替え
+toolbar.js          2行ツールバー生成
 palette-renderer.js モード別パレット描画
-dnd.js          パレット→グリッドへの DnD（タッチ対応）
-selection.js    単体・複数選択・一括移動
+dnd.js              パレット→グリッドへの DnD（タッチ対応）
+selection.js        単体・複数選択・一括移動
+sunlight.js         採光スコア計算・2D オーバーレイ描画
 ```
 
 ## 状態管理パターン
@@ -62,9 +65,12 @@ ui.selectedElementKey
 
 ### 部屋（Room）
 ```js
-{ id, typeId, label, x, y, w, h, color, cells: ["col,row", ...], isDoma }
+{ id, typeId, label, x, y, w, h, color, cells: ["col,row", ...], isDoma,
+  floorMaterial?: string,   // 'auto'|'flooring'|'tile'|'tatami'|'mortar'|'carpet'|'marble'
+  wallColor?: string }      // '#rrggbb' — 未設定は undefined（グローバル壁色を使用）
 ```
 `cells` が実際の占有セル。`x/y/w/h` はバウンディングボックス（`updateIrregularRoomBounds()` で再計算）。
+`floorMaterial` は省略または `'auto'` のとき部屋タイプのデフォルト床材を使用。
 
 ### 建具（Element）
 ```js
@@ -103,6 +109,13 @@ saveProject(state);  // localStorage に保存
 - `renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mode, selectedKey, dragPreviewEdges = [])` — 第9引数は省略可
 - 壁ドラッグ描画: mousedown で辺を記録、document.mousemove でプレビュー、document.mouseup で確定
 
+## コンテキストメニューの実装規約
+
+- `context-menu.js` の `initContextMenu({...})` で初期化、`showContextMenu(e, svgEl, doorEl)` を呼び出す
+- contextmenu イベントリスナーは **SVG ではなくグリッドコンテナ要素** に登録する。
+  passThrough モードでは `walls.js` が `svgEl.style.pointerEvents = 'none'` をセットするため、SVG に登録すると発火しない。
+- ドア検出は `wall-handler.js` 内で行い、`doorEl`（見つかれば要素オブジェクト、なければ `null`）をコールバックへ渡す
+
 ## 物理スケール
 
 | 定数 | 値 |
@@ -118,8 +131,9 @@ saveProject(state);  // localStorage に保存
 
 - **部屋**: 17種（LDK/リビング/ダイニング/キッチン/主寝室/子供部屋/書斎/浴室/トイレ/洗面所/玄関/土間/廊下/納戸WIC/バルコニー/吹き抜け/カスタム）
 - **建具**: 8種（wall/lowwall/door/slide_door/window/window_tall/window_low/eraser）
-- **家具**: 7種（kitchen/chair/table/washer/sink/fridge/custom）
+- **家具**: 9種（kitchen/chair/table/washer/sink/fridge/sofa/lowtable/custom）
 - **外構**: 4種（駐車場/庭・芝生/植栽・樹木/テラス）
+- **床材**: 7種（auto/flooring/tile/tatami/mortar/carpet/marble）— `materials.js` で管理
 
 ## 既知の制約
 
@@ -128,4 +142,4 @@ saveProject(state);  // localStorage に保存
 - 家具は他の家具・壁をすり抜けて配置可能（衝突判定なし）
 - SVG/PNG エクスポートは現在フロアのみ
 - Undo スタックに上限なし（長時間作業でメモリ増大の可能性）
-- 採光シミュレーションは 3D ウォークスルー内のみ（2D グリッドへの可視化なし）
+- 採光オーバーレイは窓位置から距離減衰で近似（実際の日射計算ではない）
