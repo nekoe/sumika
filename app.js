@@ -405,10 +405,10 @@ document.addEventListener('DOMContentLoaded', () => {
       state.land = { points: [], closed: false };
       ui.multiSelected = new Set();
       ui.selectedLandscapeId = null;
-      saveProject(state);
       ui.grid = createGrid(state.gridCols, state.gridRows);
       rebuildGrid(ui.grid, state.rooms);
       renderAll();
+      saveProject(state);
       ui.toolbar.syncFloor(0);
     },
   });

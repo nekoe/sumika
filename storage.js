@@ -50,7 +50,7 @@ export function getCurrentProjectId()   { return _currentProjectId; }
 
 // ── 未保存変更チェック ────────────────────────────────────────────
 export function hasUnsavedChanges(state) {
-  if (!_lastSavedJSON) return false;
+  if (!_lastSavedJSON) return true; // 一度も保存できていなければ未保存扱い
   return _lastSavedJSON !== JSON.stringify(_serializeState(state));
 }
 
@@ -94,8 +94,12 @@ export function loadProjectData(id) {
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────
+function _newId() {
+  return `proj-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export function createProject(name) {
-  const id  = `proj-${Date.now()}`;
+  const id  = _newId();
   const now = new Date().toISOString();
   const index = loadProjectIndex();
   index.unshift({ id, name, createdAt: now, updatedAt: now });
@@ -119,12 +123,13 @@ export function renameProject(id, newName) {
 }
 
 export function duplicateProject(id, newName) {
-  const raw = localStorage.getItem(projectKey(id));
-  const newId = `proj-${Date.now()}`;
-  const now   = new Date().toISOString();
-  const index = loadProjectIndex();
+  const raw     = localStorage.getItem(projectKey(id));
+  const newId   = _newId();
+  const now     = new Date().toISOString();
+  const index   = loadProjectIndex();
   const origIdx = index.findIndex(p => p.id === id);
-  index.splice(origIdx + 1, 0, { id: newId, name: newName, createdAt: now, updatedAt: now });
+  const insertAt = origIdx < 0 ? index.length : origIdx + 1;
+  index.splice(insertAt, 0, { id: newId, name: newName, createdAt: now, updatedAt: now });
   _saveProjectIndex(index);
   if (raw) localStorage.setItem(projectKey(newId), raw);
   return newId;

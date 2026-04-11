@@ -161,9 +161,15 @@ function _switchProject(id) {
     if (!confirm('保存されていない変更があります。このまま切り替えますか？\n（現在のプロジェクトは最後の自動保存の状態に戻ります）')) return;
   }
 
+  _doSwitch(id);
+  _closeModal();
+}
+
+// 確認なしで切り替える（削除後の自動切替など内部用）
+function _doSwitch(id) {
   const data = loadProjectData(id);
   resetUndoRedo();
-  _applyProjectData(data ?? { gridCols: 20, gridRows: 15, cellSize: 44 });
+  _applyProjectData(data ?? { gridCols: state.gridCols, gridRows: state.gridRows, cellSize: state.cellSize });
   setCurrentProjectId(id);
   ui.currentProjectId = id;
   _rebuildAndSync();
@@ -172,7 +178,6 @@ function _switchProject(id) {
   const name  = entry?.name ?? '';
   _updateProjectBtn(name);
   _showToast?.(`「${name}」を開きました`);
-  _closeModal();
 }
 
 function _startRename(id) {
@@ -222,7 +227,10 @@ function _deleteProject(id) {
   deleteProject(id);
   if (id === ui.currentProjectId) {
     const remaining = loadProjectIndex();
-    if (remaining.length > 0) _switchProject(remaining[0].id);
+    if (remaining.length > 0) {
+      _doSwitch(remaining[0].id); // 確認不要（削除直後の自動切替）
+      _renderModal();
+    }
   } else {
     _renderModal();
   }
@@ -239,7 +247,17 @@ function _createNewProject() {
 
   const newId = createProject(name);
   resetUndoRedo();
-  _applyProjectData({ gridCols: state.gridCols, gridRows: state.gridRows, cellSize: state.cellSize });
+  _applyProjectData({
+    gridCols:  state.gridCols,
+    gridRows:  state.gridRows,
+    cellSize:  state.cellSize,
+    floors:    [
+      { rooms: [], elements: [], stairs: [], furniture: [] },
+      { rooms: [], elements: [], stairs: [], furniture: [] },
+    ],
+    land:      { points: [], closed: false },
+    landscape: [],
+  });
   setCurrentProjectId(newId);
   ui.currentProjectId = newId;
   saveProject(state); // 空の初期状態を保存
