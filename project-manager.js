@@ -58,6 +58,7 @@ function _renderModal() {
         <span class="pm-sort-label">並び替え:</span>
         <button class="pm-sort-btn${_sortBy === 'updatedAt' ? ' active' : ''}" data-sort="updatedAt">更新順</button>
         <button class="pm-sort-btn${_sortBy === 'createdAt' ? ' active' : ''}" data-sort="createdAt">作成順</button>
+        <button class="pm-sort-btn${_sortBy === 'name'      ? ' active' : ''}" data-sort="name">名前順</button>
       </div>
       <ul class="pm-list">
         ${sorted.map(p => `
@@ -269,7 +270,10 @@ function _createNewProject() {
 
 // ── ユーティリティ ───────────────────────────────────────────────
 function _getSortedIndex() {
-  return [...loadProjectIndex()].sort((a, b) => new Date(b[_sortBy]) - new Date(a[_sortBy]));
+  return [...loadProjectIndex()].sort((a, b) => {
+    if (_sortBy === 'name') return a.name.localeCompare(b.name, 'ja');
+    return new Date(b[_sortBy]) - new Date(a[_sortBy]);
+  });
 }
 
 function _updateProjectBtn(name) {
