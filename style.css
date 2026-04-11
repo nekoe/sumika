@@ -875,6 +875,12 @@ body {
   stroke-dasharray: 4 2;
 }
 
+/* ドラッグ描画プレビュー */
+.el-drag-preview {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 /* ホバープレビュー */
 .el-preview {
   stroke: #2563eb;

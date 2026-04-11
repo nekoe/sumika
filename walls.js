@@ -50,7 +50,8 @@ function pixelToEdge(px, py, cs) {
 }
 
 // SVGに全要素をレンダリング
-export function renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mode, selectedKey) {
+// dragPreviewEdges: ドラッグ中の仮配置辺リスト（省略可、デフォルト空配列）
+export function renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mode, selectedKey, dragPreviewEdges = []) {
   svgEl.innerHTML = '';
   svgEl.setAttribute('width', cols * cs);
   svgEl.setAttribute('height', rows * cs);
@@ -63,7 +64,12 @@ export function renderWallLayer(svgEl, elements, cs, cols, rows, hoveredEdge, mo
     renderElement(svgEl, el, cs, isSelected);
   }
 
-  if (hoveredEdge && mode !== 'room') {
+  if (dragPreviewEdges.length > 0) {
+    // ドラッグ中: プレビューを表示（ホバープレビューより優先）
+    for (const edge of dragPreviewEdges) {
+      renderDragPreview(svgEl, edge, cs, mode);
+    }
+  } else if (hoveredEdge && mode !== 'room') {
     const exists = elements.some(e =>
       e.col === hoveredEdge.col && e.row === hoveredEdge.row && e.dir === hoveredEdge.dir
     );
@@ -248,6 +254,15 @@ function renderWindow(svgEl, col, row, dir, cs, cls = 'el-window') {
     g.appendChild(line);
   }
   svgEl.appendChild(g);
+}
+
+function renderDragPreview(svgEl, edge, cs, mode) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('class', 'el-drag-preview');
+  svgEl.appendChild(g);
+  // fakeEl を renderElement に渡し、実際の建具と同じ形状をグループ内に描画する
+  const fakeEl = { col: edge.col, row: edge.row, dir: edge.dir, type: mode, color: null, flip: false };
+  renderElement(g, fakeEl, cs, false);
 }
 
 function renderHoverPreview(svgEl, edge, cs, willRemove) {
