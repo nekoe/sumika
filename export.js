@@ -31,6 +31,8 @@ export function buildSVGString() {
     .land-first { fill: #dc2626; }
     .land-label-bg { fill: rgba(255,255,255,0.9); }
     .land-label { font-size: 11px; fill: #166534; font-family: sans-serif; }
+    .el-slide-frame { stroke: #b45309; stroke-width: 1.5; stroke-linecap: round; }
+    .el-slide-panel { stroke: #b45309; stroke-width: 2.5; stroke-linecap: round; }
   `;
 
   let inner = '';
@@ -51,7 +53,7 @@ export function buildSVGString() {
     inner += `<polygon points="${ptStr}" class="land-fill"/>`;
   }
 
-  // 部屋セル・ラベル・階段（カレントフロア）
+  // 部屋セル（カレントフロア）— パス1: 色塗りのみ
   const fl = state.floors[state.currentFloor];
   for (const room of (fl.rooms || [])) {
     const type = getTypeById(room.typeId);
@@ -60,17 +62,9 @@ export function buildSVGString() {
       const [col, row] = key.split(',').map(Number);
       inner += `<rect x="${col*cs}" y="${row*cs}" width="${cs}" height="${cs}" fill="${color}"/>`;
     }
-    const rx = room.x * cs, ry = room.y * cs;
-    const rw = room.w * cs, rh = room.h * cs;
-    const cx = rx + rw / 2, cy = ry + rh / 2;
-    const icon = room.icon ?? type.icon;
-    const { tatami } = calcAreaCells(room.cells);
-    const STRIP_H = 16;
-    inner += `<rect x="${rx}" y="${ry}" width="${rw}" height="${STRIP_H}" fill="rgba(255,255,255,0.55)"/>`;
-    inner += `<text x="${rx + 5}" y="${ry + 11}" font-size="10" font-weight="600" font-family="sans-serif" fill="rgba(0,0,0,0.8)">${escText(room.label)}</text>`;
-    inner += `<text x="${rx + rw - 5}" y="${ry + 11}" text-anchor="end" font-size="10" font-family="sans-serif" fill="#6b7280">${escText(tatami)}畳</text>`;
-    inner += `<text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="20" font-family="sans-serif">${escText(icon)}</text>`;
   }
+
+  // 階段（カレントフロア）
   for (const s of (fl.stairs || [])) {
     inner += `<rect x="${s.x*cs}" y="${s.y*cs}" width="${s.w*cs}" height="${s.h*cs}" fill="url(#stair-stripe)" stroke="#b8a080" stroke-width="1" stroke-dasharray="4 3" rx="2"/>`;
     const scx = (s.x + s.w / 2) * cs;
@@ -103,6 +97,21 @@ export function buildSVGString() {
     const fcy = (furn.y + furn.h / 2) * cs;
     inner += `<text x="${fcx}" y="${fcy - 4}" text-anchor="middle" font-size="14" font-family="sans-serif">${escText(furnIcon)}</text>`;
     inner += `<text x="${fcx}" y="${fcy + 11}" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#475569">${escText(furnLabel)}</text>`;
+  }
+
+  // 部屋ストリップ・ラベル・アイコン — パス2: 家具の上に重ねる
+  for (const room of (fl.rooms || [])) {
+    const type = getTypeById(room.typeId);
+    const rx = room.x * cs, ry = room.y * cs;
+    const rw = room.w * cs, rh = room.h * cs;
+    const cx = rx + rw / 2, cy = ry + rh / 2;
+    const icon = room.icon ?? type.icon;
+    const { tatami } = calcAreaCells(room.cells);
+    const STRIP_H = 16;
+    inner += `<rect x="${rx}" y="${ry}" width="${rw}" height="${STRIP_H}" fill="rgba(255,255,255,0.55)"/>`;
+    inner += `<text x="${rx + 5}" y="${ry + 11}" font-size="10" font-weight="600" font-family="sans-serif" fill="rgba(0,0,0,0.8)">${escText(room.label)}</text>`;
+    inner += `<text x="${rx + rw - 5}" y="${ry + 11}" text-anchor="end" font-size="10" font-family="sans-serif" fill="#6b7280">${escText(tatami)}畳</text>`;
+    inner += `<text x="${cx}" y="${cy + 8}" text-anchor="middle" font-size="20" font-family="sans-serif">${escText(icon)}</text>`;
   }
 
   // 壁・ドア・窓レイヤー
